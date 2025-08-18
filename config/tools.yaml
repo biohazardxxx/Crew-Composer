@@ -1,0 +1,65 @@
+# Tools configuration. Tools are grouped by category for clarity.
+# Only tools with enabled: true are instantiated.
+
+tools:
+  file_document_management:
+    - name: file_read
+      module: crewai_tools
+      class: FileReadTool
+      enabled: true
+      args: {}
+
+    - name: dir_read
+      module: crewai_tools
+      class: DirectoryReadTool
+      enabled: true
+      args:
+        directory: .
+
+  web_scraping_browsing:
+    - name: web_rag
+      module: crewai_tools
+      class: WebsiteSearchTool
+      enabled: true
+      args: {}
+
+  search_research:
+    - name: search
+      module: crewai_tools
+      class: SerperDevTool
+      enabled: false
+      args: {}
+      env:
+        SERPER_API_KEY: ${SERPER_API_KEY}
+
+  database_data_management:
+    - name: qdrant_search
+      module: crewai_tools
+      class: QdrantVectorSearchTool
+      enabled: false
+      args:
+        host: ${QDRANT_HOST:localhost}
+        port: ${QDRANT_PORT:6333}
+        collection_name: ${QDRANT_COLLECTION}
+
+  ai_machine_learning: []  # LLMs are configured on agents via the 'llm' field. This section is intentionally empty.
+
+  cloud_storage_solutions:
+    - name: s3_upload
+      module: your_package.s3_tools  # ‼️ TODO: Replace with actual module providing S3UploadTool
+      class: S3UploadTool
+      enabled: false
+      args:
+        bucket: ${AWS_S3_BUCKET}
+      env:
+        AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+        AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+        AWS_REGION: ${AWS_REGION:us-east-1}
+
+  automation_integration:
+    - name: http_get
+      module: your_package.http_tools  # ‼️ TODO: Replace with actual module providing HTTPGetTool
+      class: HTTPGetTool
+      enabled: false
+      args:
+        base_url: https://api.example.com

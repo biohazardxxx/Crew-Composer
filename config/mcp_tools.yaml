@@ -1,0 +1,45 @@
+# MCP tools integration via configuration
+#
+# Define MCP servers here. The ToolRegistry will connect at startup and dynamically
+# register all available tools from each enabled server. Tools are exposed with a
+# prefix of '<name>.' by default (configurable with 'name_prefix'). You can include
+# or exclude tools by name.
+
+servers:
+  # 1) STDIO server example (requires Python package 'mcp')
+  - name: stdio_example
+    enabled: false
+    transport: stdio
+    command: python
+    args: ["servers/your_server.py"]
+    env:
+      UV_PYTHON: "3.12"
+
+  # 2) SSE server example
+  - name: sse_example
+    enabled: false
+    transport: sse
+    url: http://localhost:8000/sse
+    headers: {}
+
+  # 3) Streamable HTTP server example
+  - name: http_example
+    enabled: false
+    transport: streamable-http
+    url: http://localhost:8001/mcp
+    headers: {}
+
+  # Example with filters and prefix
+  - name: brave_search
+    enabled: false
+    transport: sse
+    url: ${BRAVE_MCP_URL:http://localhost:8000/sse}
+    name_prefix: "brave."
+    include_tools: []   # e.g., ["local_search", "web_search"]
+    exclude_tools: []
+    connect_timeout: 60
+
+# Optional: static tool wrappers can still be declared here if you need them, but
+# most users can rely on dynamic discovery via 'servers' above.
+tools:
+  mcp_wrappers: []

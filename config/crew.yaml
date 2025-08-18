@@ -1,0 +1,11 @@
+# Crew-wide settings and defaults
+process: sequential  # options: sequential, hierarchical
+verbose: true
+planning: false
+memory: false
+knowledge: {}
+
+# Tool configuration files (merged in order)
+tools_files:
+  - config/tools.yaml
+  - config/mcp_tools.yaml
