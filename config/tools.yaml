@@ -16,12 +16,98 @@ tools:
       args:
         directory: .
 
+    - name: pdf_search
+      module: crewai_tools
+      class: PDFSearchTool
+      enabled: false
+      args: {}
+
+    - name: docx_search
+      module: crewai_tools
+      class: DOCXSearchTool
+      enabled: false
+      args: {}
+
+    - name: csv_search
+      module: crewai_tools
+      class: CSVSearchTool
+      enabled: false
+      args: {}
+
+    - name: txt_search
+      module: crewai_tools
+      class: TXTSearchTool
+      enabled: false
+      args: {}
+
+    - name: json_search
+      module: crewai_tools
+      class: JSONSearchTool
+      enabled: false
+      args: {}
+
+    - name: mdx_search
+      module: crewai_tools
+      class: MDXSearchTool
+      enabled: false
+      args: {}
+
   web_scraping_browsing:
     - name: web_rag
       module: crewai_tools
       class: WebsiteSearchTool
       enabled: true
       args: {}
+
+    - name: scrape_website
+      module: crewai_tools
+      class: ScrapeWebsiteTool
+      enabled: false
+      args: {}
+
+    - name: firecrawl_search
+      module: crewai_tools
+      class: FirecrawlSearchTool
+      enabled: false
+      args: {}
+      env:
+        FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY}
+
+    - name: firecrawl_scrape
+      module: crewai_tools
+      class: FirecrawlScrapeWebsiteTool
+      enabled: false
+      args: {}
+      env:
+        FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY}
+
+    - name: firecrawl_crawl
+      module: crewai_tools
+      class: FirecrawlCrawlWebsiteTool
+      enabled: false
+      args: {}
+      env:
+        FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY}
+
+    - name: scrape_element
+      module: crewai_tools
+      class: ScrapeElementFromWebsiteTool
+      enabled: false
+      args: {}
+
+    - name: selenium_scrape
+      module: crewai_tools
+      class: SeleniumScrapingTool
+      enabled: false
+      args: {}
+
+    - name: serper_scrape
+      module: crewai_tools
+      class: SerperScrapeWebsiteTool
+      enabled: false
+      args: {}
+      env:
+        SERPER_API_KEY: ${SERPER_API_KEY}
 
   search_research:
     - name: search
@@ -31,6 +117,60 @@ tools:
       args: {}
       env:
         SERPER_API_KEY: ${SERPER_API_KEY}
+
+    - name: tavily_search
+      module: crewai_tools
+      class: TavilySearchTool
+      enabled: false
+      args: {}
+      env:
+        TAVILY_API_KEY: ${TAVILY_API_KEY}
+
+    - name: brave_search
+      module: crewai_tools
+      class: BraveSearchTool
+      enabled: false
+      args: {}
+      env:
+        BRAVE_API_KEY: ${BRAVE_API_KEY}
+
+    - name: serpapi_search
+      module: crewai_tools
+      class: SerpApiGoogleSearchTool
+      enabled: false
+      args: {}
+      env:
+        SERPAPI_API_KEY: ${SERPAPI_API_KEY}
+
+    - name: youtube_video_search
+      module: crewai_tools
+      class: YoutubeVideoSearchTool
+      enabled: false
+      args: {}
+      env:
+        YOUTUBE_API_KEY: ${YOUTUBE_API_KEY}
+
+    - name: youtube_channel_search
+      module: crewai_tools
+      class: YoutubeChannelSearchTool
+      enabled: false
+      args: {}
+      env:
+        YOUTUBE_API_KEY: ${YOUTUBE_API_KEY}
+
+    - name: github_search
+      module: crewai_tools
+      class: GithubSearchTool
+      enabled: false
+      args: {}
+      env:
+        GITHUB_TOKEN: ${GITHUB_TOKEN}
+
+    - name: arxiv_papers
+      module: crewai_tools
+      class: ArxivPaperTool
+      enabled: false
+      args: {}
 
   database_data_management:
     - name: qdrant_search
@@ -42,24 +182,108 @@ tools:
         port: ${QDRANT_PORT:6333}
         collection_name: ${QDRANT_COLLECTION}
 
+    - name: weaviate_search
+      module: crewai_tools
+      class: WeaviateVectorSearchTool
+      enabled: false
+      args: {}
+      env:
+        WEAVIATE_URL: ${WEAVIATE_URL}
+        WEAVIATE_API_KEY: ${WEAVIATE_API_KEY}
+
+    - name: mongodb_vector_search
+      module: crewai_tools
+      class: MongoDBVectorSearchTool
+      enabled: false
+      args: {}
+      env:
+        MONGODB_URI: ${MONGODB_URI}
+
+    - name: pg_search
+      module: crewai_tools
+      class: PGSearchTool
+      enabled: false
+      args: {}
+      env:
+        PGHOST: ${PGHOST}
+        PGPORT: ${PGPORT:5432}
+        PGUSER: ${PGUSER}
+        PGPASSWORD: ${PGPASSWORD}
+        PGDATABASE: ${PGDATABASE}
+
+    - name: singlestore_search
+      module: crewai_tools
+      class: SingleStoreSearchTool
+      enabled: false
+      args: {}
+
+    - name: snowflake_search
+      module: crewai_tools
+      class: SnowflakeSearchTool
+      enabled: false
+      args: {}
+      env:
+        SNOWFLAKE_ACCOUNT: ${SNOWFLAKE_ACCOUNT}
+        SNOWFLAKE_USER: ${SNOWFLAKE_USER}
+        SNOWFLAKE_PASSWORD: ${SNOWFLAKE_PASSWORD}
+
+    - name: couchbase_vector_search
+      module: crewai_tools
+      class: CouchbaseFTSVectorSearchTool
+      enabled: false
+      args: {}
+      env:
+        COUCHBASE_CONNECTION_STRING: ${COUCHBASE_CONNECTION_STRING}
+        COUCHBASE_USERNAME: ${COUCHBASE_USERNAME}
+        COUCHBASE_PASSWORD: ${COUCHBASE_PASSWORD}
+        COUCHBASE_BUCKET: ${COUCHBASE_BUCKET}
+
   ai_machine_learning: []  # LLMs are configured on agents via the 'llm' field. This section is intentionally empty.
 
   cloud_storage_solutions:
-    - name: s3_upload
-      module: your_package.s3_tools  # ‼️ TODO: Replace with actual module providing S3UploadTool
-      class: S3UploadTool
+    - name: s3_read
+      module: crewai_tools
+      class: S3ReaderTool
       enabled: false
-      args:
-        bucket: ${AWS_S3_BUCKET}
+      args: {}
       env:
         AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
         AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
         AWS_REGION: ${AWS_REGION:us-east-1}
+        AWS_S3_BUCKET: ${AWS_S3_BUCKET}
+
+    - name: s3_write
+      module: crewai_tools
+      class: S3WriterTool
+      enabled: false
+      args: {}
+      env:
+        AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+        AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+        AWS_REGION: ${AWS_REGION:us-east-1}
+        AWS_S3_BUCKET: ${AWS_S3_BUCKET}
 
   automation_integration:
-    - name: http_get
-      module: your_package.http_tools  # ‼️ TODO: Replace with actual module providing HTTPGetTool
-      class: HTTPGetTool
+    - name: zapier_action
+      module: crewai_tools
+      class: ZapierActionTool
       enabled: false
-      args:
-        base_url: https://api.example.com
+      args: {}
+      env:
+        ZAPIER_NLA_API_KEY: ${ZAPIER_NLA_API_KEY}
+
+    - name: multion_action
+      module: crewai_tools
+      class: MultiOnTool
+      enabled: false
+      args: {}
+      env:
+        MULTION_API_KEY: ${MULTION_API_KEY}
+
+    - name: composio_action
+      module: crewai_tools
+      class: ComposioTool
+      enabled: false
+      args: {}
+      env:
+        COMPOSIO_API_KEY: ${COMPOSIO_API_KEY}

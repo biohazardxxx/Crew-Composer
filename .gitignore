@@ -58,7 +58,6 @@ logs/
 
 # Environment & secrets
 .env
-.env.*
 .python-version
 
 # Poetry / pipenv (if used)
