@@ -11,6 +11,8 @@ researcher:
   tool_names: ["web_rag","scrape_website","scrape_element"]
   # LLM alias recognized by CrewAI/llms(), API key via OPENAI_API_KEY
   llm: gpt-4o-mini
+  # Optional: LLM temperature (0-2), defaults to CrewAI default
+  llm_temperature: 0.2
   # Optional: enable built-in caching for this agent (supported CrewAI versions only)
   # cache: true
   # Optional: disable interactive human input prompts for this agent (if supported)

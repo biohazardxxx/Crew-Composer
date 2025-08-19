@@ -209,6 +209,7 @@ class ConfigDrivenCrew:
         multimodal_val = cfg.get("multimodal", base_cfg.pop("multimodal", None))
         max_rpm_val = cfg.get("max_rpm", base_cfg.pop("max_rpm", None))
         max_iter_val = cfg.get("max_iter", base_cfg.pop("max_iter", None))
+        llm_temperature_val = cfg.get("llm_temperature", base_cfg.pop("llm_temperature", None))
 
         agent_kwargs = {
             "config": config_payload,
@@ -227,6 +228,8 @@ class ConfigDrivenCrew:
             agent_kwargs["max_rpm"] = max_rpm_val
         if max_iter_val is not None:
             agent_kwargs["max_iter"] = max_iter_val
+        if llm_temperature_val is not None:
+            agent_kwargs["llm_temperature"] = llm_temperature_val
         return Agent(**agent_kwargs)
 
     @crew
