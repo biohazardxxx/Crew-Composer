@@ -76,7 +76,7 @@ tools:
     - name: firecrawl_scrape
       module: crewai_tools
       class: FirecrawlScrapeWebsiteTool
-      enabled: false
+      enabled: true
       args: {}
       env:
         FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY}

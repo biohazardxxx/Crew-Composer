@@ -77,7 +77,7 @@ python -m pip install mcp
 - `config/agents.yaml`: Roles, goals, backstories, LLMs, and tools per agent.
 - `config/tasks.yaml`: Descriptions, expected outputs, default agent, context deps, and optional `output_file`.
 - `config/crew.yaml`: Process (`sequential`/`hierarchical`), verbosity, planning, memory, knowledge, and `tools_files` list.
-- `config/tools.yaml`: Tool categories with entries `{ name, module, class, enabled, args, env }`.
+- `config/tools.yaml`: CrewAi default tool categories with entries `{ name, module, class, enabled, args, env }`.
 - `config/mcp_tools.yaml`: MCP servers and tool wrappers. Disabled by default.
 
 Environment variables in configs use `${VAR}` or `${VAR:default}` and resolve from your `.env` and OS env.
@@ -178,4 +178,4 @@ Notes:
 
 ## License
 
-MIT (or your choice)
+MIT

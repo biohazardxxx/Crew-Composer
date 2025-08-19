@@ -7,7 +7,7 @@ researcher:
   backstory: "An expert analyst with a keen eye for market trends."
   verbose: true
   allow_delegation: false
-  tool_names: ["search", "web_rag"]
+  tool_names: ["firecrawl_scrape", "web_rag"]
   # LLM alias recognized by CrewAI/llms(), API key via OPENAI_API_KEY
   llm: gpt-4o-mini
 
