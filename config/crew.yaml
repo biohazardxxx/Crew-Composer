@@ -1,10 +1,17 @@
 # Crew-wide settings and defaults
-process: sequential  # options: sequential, hierarchical
+process: hierarchical  # options: sequential, hierarchical
 verbose: true
 planning: true
 memory: true
 planning_llm: gpt-4o-mini
 knowledge: {}
+run_async: false  # when true, CLI runs kickoff asynchronously
+# Optional: specify a manager agent by name (must match an agent key in agents.yaml)
+# manager_agent: summary_analyst
+# Manager LLM used to manage the crew (applies when hierarchical or when used explicitly)
+manager_llm: gpt-4o-mini
+
+# IMPORTANT: Either manager_agent or manager_llm must be set when using the hierarchical process.
 
 # Tool configuration files (merged in order)
 tools_files:

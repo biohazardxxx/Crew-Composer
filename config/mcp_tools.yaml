@@ -30,7 +30,7 @@ servers:
     headers: {}
 
   # Example with filters and prefix
-  - name: brave_search
+  - name: brave_search_mcp
     enabled: false
     transport: sse
     url: ${BRAVE_MCP_URL:http://localhost:8000/sse}
@@ -39,6 +39,15 @@ servers:
     exclude_tools: []
     connect_timeout: 60
 
+  - name: code-research
+    enabled: true
+    transport: stdio
+    command: node
+    args: ["E:\\MCP_Servers\\code-research-mcp-server\\build\\index.js"]
+    name_prefix: "code-research."
+    include_tools: []  
+    exclude_tools: []
+    connect_timeout: 60
 # Optional: static tool wrappers can still be declared here if you need them, but
 # most users can rely on dynamic discovery via 'servers' above.
 tools:

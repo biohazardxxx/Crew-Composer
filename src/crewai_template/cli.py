@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from typing import Any, Dict, Optional
+import asyncio
 
 import typer
 from dotenv import load_dotenv
@@ -101,8 +102,15 @@ def run(
         console.print(f"[yellow]Warning: unable to pre-create output directories: {e}[/yellow]")
 
     try:
-        crew = ConfigDrivenCrew().crew()
-        result = crew.kickoff(inputs=data or {"topic": "Hello World"})
+        crew_cfg = load_crew_config(root)
+        crew_instance = ConfigDrivenCrew()
+        if getattr(crew_cfg, "run_async", False):
+            async def _run():
+                result = await crew_instance.kickoff_async(inputs=data or {"topic": "Hello World"})
+                return result
+            result = asyncio.run(_run())
+        else:
+            result = crew_instance.crew().kickoff(inputs=data or {"topic": "Hello World"})
         console.print("\n[bold]Result:[/bold]\n")
         console.print(result)
     except Exception as e:  # noqa: BLE001

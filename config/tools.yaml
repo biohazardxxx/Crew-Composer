@@ -56,13 +56,13 @@ tools:
     - name: web_rag
       module: crewai_tools
       class: WebsiteSearchTool
-      enabled: false
+      enabled: true
       args: {}
 
     - name: scrape_website
       module: crewai_tools
       class: ScrapeWebsiteTool
-      enabled: false
+      enabled: true
       args: {}
 
     - name: scrape_element
@@ -82,7 +82,7 @@ tools:
     - name: firecrawl_scrape
       module: crewai_tools
       class: FirecrawlScrapeWebsiteTool
-      enabled: true
+      enabled: false
       args: {}
       env:
         FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY}
@@ -94,7 +94,7 @@ tools:
       args: {}
       env:
         FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY}
-        
+
     - name: selenium_scrape
       module: crewai_tools
       class: SeleniumScrapingTool

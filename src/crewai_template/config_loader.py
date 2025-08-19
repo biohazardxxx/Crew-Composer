@@ -54,8 +54,13 @@ class CrewConfig(BaseModel):
     verbose: bool = Field(default=True)
     planning: bool = Field(default=False)
     planning_llm: Optional[str] = None
+    manager_llm: Optional[str] = Field(default="gpt-4o-mini")
     memory: bool = Field(default=False)
     knowledge: Dict[str, Any] = Field(default_factory=dict)
+    # When true, CLI will kickoff the crew asynchronously
+    run_async: bool = Field(default=False)
+    # Optional manager agent name from agents.yaml (e.g., 'researcher')
+    manager_agent: Optional[str] = None
     tools_files: List[str] = Field(default_factory=lambda: [
         "config/tools.yaml",
         "config/mcp_tools.yaml",

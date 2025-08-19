@@ -1,24 +1,27 @@
 # Agents configuration (Hello World style)
 # You can add more agents by following this structure.
 
-orchestrator:
-  role: "Orchestrator"
-  goal: "Orchestrate the crew to complete the task"
-  backstory: "An expert orchestrator with the ability to orchestrating agents to get the job done efficiently."
-  verbose: true
-  allow_delegation: true
-  # LLM alias recognized by CrewAI/llms(), API key via OPENAI_API_KEY
-  llm: gpt-4o-mini
-
 researcher:
   role: "Market Research Analyst"
   goal: "Provide up-to-date analysis about {topic}"
   backstory: "An expert analyst with a keen eye for market trends."
   verbose: true
   allow_delegation: false
-  tool_names: ["firecrawl_scrape"]
+  enabled: true
+  tool_names: ["web_rag","scrape_website","scrape_element"]
   # LLM alias recognized by CrewAI/llms(), API key via OPENAI_API_KEY
   llm: gpt-4o-mini
+  # Optional: enable built-in caching for this agent (supported CrewAI versions only)
+  # cache: true
+  # Optional: disable interactive human input prompts for this agent (if supported)
+  # human_input: false
+  # Optional: allow the agent to execute code (ensure sandboxing as needed)
+  # allow_code_execution: false
+  # Optional: enable multimodal capabilities if supported by the underlying LLM
+  # multimodal: true
+  # Optional: rate limiting and iteration control
+  # max_rpm: null
+  # max_iter: 25
 
 reporting_analyst:
   role: "Content Writer"
@@ -26,6 +29,7 @@ reporting_analyst:
   backstory: "A skilled writer with a passion for new and promising trends."
   verbose: true
   allow_delegation: false
+  enabled: true
   tool_names: ["file_read", "dir_read"]
   llm: gpt-4o
 
@@ -35,5 +39,6 @@ summary_analyst:
   backstory: "A skilled writer with an exceptional skill to summarize reports."
   verbose: true
   allow_delegation: false
+  enabled: true
   tool_names: ["file_read", "dir_read"]
   llm: gpt-4o
