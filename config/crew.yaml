@@ -1,8 +1,9 @@
 # Crew-wide settings and defaults
 process: sequential  # options: sequential, hierarchical
 verbose: true
-planning: false
-memory: false
+planning: true
+memory: true
+planning_llm: gpt-4o-mini
 knowledge: {}
 
 # Tool configuration files (merged in order)

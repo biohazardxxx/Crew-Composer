@@ -75,6 +75,9 @@ output/
 # Node (if present in submodules or tools)
 node_modules/
 
+# DB
+chromadb*
+
 # CrewAI template specific
 # (keep config under version control; ignore local overrides)
 config/*.local.yaml

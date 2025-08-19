@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 from pathlib import Path
 from typing import List
 
@@ -76,12 +77,32 @@ class ConfigDrivenCrew:
 
     @crew
     def crew(self) -> Crew:
-        return Crew(
-            agents=[self.researcher(), self.reporting_analyst()],
-            tasks=[self.research_task(), self.reporting_task()],
-            process=Process.sequential if str(self._crew_cfg.process).lower() == "sequential" else Process.hierarchical,
-            verbose=self._crew_cfg.verbose,
-            planning=self._crew_cfg.planning,
-            memory=self._crew_cfg.memory,
-            knowledge=self._crew_cfg.knowledge or None,
-        )
+        crew_kwargs = {
+            "agents": [self.researcher(), self.reporting_analyst()],
+            "tasks": [self.research_task(), self.reporting_task()],
+            "process": Process.sequential if str(self._crew_cfg.process).lower() == "sequential" else Process.hierarchical,
+            "verbose": self._crew_cfg.verbose,
+            "planning": self._crew_cfg.planning,
+            "memory": self._crew_cfg.memory,
+            "knowledge": self._crew_cfg.knowledge or None,
+        }
+
+        # Optional planning LLM support (alias string), compatible with different Crew versions
+        if getattr(self._crew_cfg, "planning_llm", None):
+            try:
+                sig = inspect.signature(Crew.__init__)
+                if "planning_llm" in sig.parameters:
+                    crew_kwargs["planning_llm"] = self._crew_cfg.planning_llm
+                elif "manager_llm" in sig.parameters:
+                    crew_kwargs["manager_llm"] = self._crew_cfg.planning_llm
+                else:
+                    console.print(
+                        "[yellow]planning_llm set in config, but Crew() does not accept planning_llm/manager_llm in this version; ignoring[/yellow]"
+                    )
+            except Exception as e:  # noqa: BLE001
+                console.print(
+                    f"[yellow]Could not introspect Crew signature ({e}); defaulting to manager_llm[/yellow]"
+                )
+                crew_kwargs["manager_llm"] = self._crew_cfg.planning_llm
+
+        return Crew(**crew_kwargs)

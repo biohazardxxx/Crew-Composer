@@ -53,6 +53,7 @@ class CrewConfig(BaseModel):
     process: Optional[str] = Field(default="sequential")
     verbose: bool = Field(default=True)
     planning: bool = Field(default=False)
+    planning_llm: Optional[str] = None
     memory: bool = Field(default=False)
     knowledge: Dict[str, Any] = Field(default_factory=dict)
     tools_files: List[str] = Field(default_factory=lambda: [
