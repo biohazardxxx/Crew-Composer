@@ -10,6 +10,7 @@ from rich.console import Console
 
 from .config_loader import get_project_root, load_agents_config, load_tasks_config, load_crew_config
 from .tool_registry import registry
+from .knowledge_loader import load_knowledge_config
 
 console = Console()
 
@@ -288,6 +289,10 @@ class ConfigDrivenCrew:
         if not tasks_list:
             tasks_list = [self.research_task(), self.reporting_task()]
 
+        # Load knowledge sources from configuration with filtering
+        selected_sources = getattr(self._crew_cfg, 'knowledge_sources', None)
+        knowledge_sources = load_knowledge_config(self.root, selected_sources=selected_sources)
+        
         crew_kwargs = {
             "agents": agents_list,
             "tasks": tasks_list,
@@ -296,6 +301,7 @@ class ConfigDrivenCrew:
             "planning": self._crew_cfg.planning,
             "memory": self._crew_cfg.memory,
             "knowledge": self._crew_cfg.knowledge or None,
+            "knowledge_sources": knowledge_sources,
         }
         if manager_agent_obj is not None:
             crew_kwargs["manager_agent"] = manager_agent_obj

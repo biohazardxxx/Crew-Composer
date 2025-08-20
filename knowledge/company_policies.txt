@@ -1,0 +1,25 @@
+Company Policies and Guidelines
+
+1. Remote Work Policy
+All employees have the flexibility to work remotely up to 3 days per week. Core collaboration hours are 10 AM - 3 PM EST. Team meetings are scheduled within these hours.
+
+2. Communication Standards
+Primary communication channels: Slack for daily coordination, Email for formal documentation, Zoom for video calls. Response time expectations: Slack messages within 2 hours, emails within 24 hours.
+
+3. Project Management
+Projects follow Agile methodology with 2-week sprints. Daily standups at 9:30 AM EST. Sprint planning on Mondays, retrospectives on Fridays. All code must be reviewed before merging.
+
+4. Technology Stack
+Primary languages: Python, JavaScript, TypeScript. Framework preferences: FastAPI for backend, React for frontend. Database: PostgreSQL for production, SQLite for development. Cloud: AWS primary, Azure secondary.
+
+5. Security Protocols
+All code must pass security scanning. No secrets in code repositories. Use environment variables for configuration. Regular security training quarterly. Incident reporting within 1 hour of discovery.
+
+6. Development Standards
+Code coverage minimum 80%. Documentation required for all public APIs. Unit tests for all new features. Integration tests for critical paths. Performance benchmarks for data processing features.
+
+7. Client Interaction
+Weekly client updates every Wednesday. Monthly progress reports. Quarterly business reviews. All client communications must be documented in CRM system.
+
+8. Professional Development
+Annual training budget of $2000 per employee. Conference attendance encouraged. Internal tech talks monthly. Mentorship program available for all levels.

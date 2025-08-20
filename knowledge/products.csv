@@ -1,0 +1,7 @@
+product_id,name,category,price,description,features,availability
+P001,Python Master Course,Education,299.99,Comprehensive Python programming course covering advanced topics and real-world applications,"Advanced Python concepts,Real-world projects,Code reviews,Lifetime access,Certificate",In Stock
+P002,AI Agent Builder,Software,149.99,Tool for building and deploying AI agents with minimal coding required,"Drag-and-drop interface,Pre-built templates,Cloud deployment,Integration APIs,Analytics",In Stock
+P003,Data Pipeline Pro,Software,199.99,End-to-end data pipeline solution for processing large datasets,"Real-time processing,Scalable architecture,Multiple data sources,Monitoring dashboard,Cloud-native",In Stock
+P004,Code Review Service,Service,79.99,Professional code review service for Python and JavaScript projects,"Expert reviewers,Detailed feedback,Performance analysis,Security audit,Best practices",Available
+P005,Consulting Package,Service,500.00,Custom consulting package for AI and software development projects,"Requirements analysis,Architecture design,Implementation guidance,Team training,Ongoing support",Available
+P006,CrewAI Template,Software,0.00,Open-source template for building CrewAI projects with YAML configuration,"YAML configuration,Modular design,Extensible architecture,CLI tools,Documentation",Open Source

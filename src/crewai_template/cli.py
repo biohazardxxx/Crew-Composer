@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+import sys
+import subprocess
 from typing import Any, Dict, Optional
 import asyncio
 
@@ -14,6 +16,7 @@ from .config_loader import (
     load_agents_config,
     load_tasks_config,
     load_crew_config,
+    load_mcp_servers_config,
     validate_all,
 )
 from .tool_registry import registry
@@ -35,12 +38,46 @@ def _kv_to_dict(items: Optional[list[str]]) -> Dict[str, Any]:
     return data
 
 
+def _ensure_mcp_if_needed(root: Path) -> None:
+    """If any MCP server uses stdio transport, ensure 'mcp' package is installed.
+
+    This avoids downstream auto-install prompts that may use an invalid requirement string.
+    """
+    try:
+        servers = load_mcp_servers_config(root)
+    except Exception:
+        return
+    needs_mcp = False
+    for spec in servers:
+        transport = (getattr(spec, "transport", "") or "").lower()
+        if transport == "stdio" or (not transport and getattr(spec, "command", None)):
+            needs_mcp = True
+            break
+    if not needs_mcp:
+        return
+    try:
+        import mcp  # type: ignore  # noqa: F401
+        return
+    except Exception:
+        pass
+    if typer.confirm("MCP stdio servers detected. Install required 'mcp' package now?", default=True):
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "mcp"])  # nosec B603
+            console.print("[green]'mcp' installed successfully.[/green]")
+        except subprocess.CalledProcessError as e:
+            console.print(f"[red]Failed to install 'mcp' via pip: {e}[/red]")
+            # Let subsequent steps raise clearer errors if needed
+    else:
+        console.print("[yellow]Proceeding without 'mcp'; stdio MCP servers will be skipped.[/yellow]")
+
+
 @app.command()
 def validate(config_dir: str = typer.Option("config", help="Directory with YAML files.")):
     """Validate all configuration files and tool imports."""
     load_dotenv(override=False)
     root = get_project_root()
     validate_all(root)
+    _ensure_mcp_if_needed(root)
     _ = registry(root)  # build tools
     console.print("[green]Tools loaded successfully.[/green]")
 
@@ -49,7 +86,9 @@ def validate(config_dir: str = typer.Option("config", help="Directory with YAML 
 def list_tools():
     """List all enabled tools resolved from configuration."""
     load_dotenv(override=False)
-    reg = registry(get_project_root())
+    root = get_project_root()
+    _ensure_mcp_if_needed(root)
+    reg = registry(root)
     for name in reg.all_names:
         console.print(f"- {name}")
 
@@ -80,6 +119,7 @@ def run(
     """
     load_dotenv(override=False)
     root = get_project_root()
+    _ensure_mcp_if_needed(root)
     _ = registry(root)  # ensure tools are instantiated early for clearer errors
 
     data: Dict[str, Any] = {}

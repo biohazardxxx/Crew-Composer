@@ -1,0 +1,102 @@
+# Knowledge Sources Configuration
+# This file defines knowledge sources that can be used by agents or crews
+# Each knowledge source has a type and specific configuration parameters
+
+knowledge_sources:
+  # Basic String Knowledge Source
+  user_profile:
+    type: string
+    content: |
+      User Profile: John Doe
+      Age: 30
+      Location: San Francisco, CA
+      Occupation: Software Engineer
+      Interests: AI, Machine Learning, Python programming
+      Preferred communication style: Technical and detailed
+  
+  # Text File Knowledge Source
+  company_policies:
+    type: text_file
+    file_path: "knowledge/company_policies.txt"
+    encoding: "utf-8"
+  
+  # PDF Knowledge Source
+  technical_documentation:
+    type: pdf
+    file_path: "knowledge/api_documentation.pdf"
+    chunk_size: 1000
+    chunk_overlap: 200
+  
+  # CSV Knowledge Source
+  product_catalog:
+    type: csv
+    file_path: "knowledge/products.csv"
+    source_column: "description"
+    metadata_columns: ["product_id", "category", "price"]
+  
+  # Excel Knowledge Source
+  sales_data:
+    type: excel
+    file_path: "knowledge/sales_report.xlsx"
+    sheet_name: "Q4_2024"
+    source_column: "notes"
+    metadata_columns: ["region", "amount", "date"]
+  
+  # JSON Knowledge Source
+  api_endpoints:
+    type: json
+    file_path: "knowledge/api_endpoints.json"
+    content_key: "documentation"
+    metadata_keys: ["endpoint", "method", "version"]
+  
+  # Web Content Knowledge Source
+  web_documentation:
+    type: web_content
+    urls:
+      - "https://docs.crewai.com/concepts/knowledge"
+      - "https://docs.crewai.com/concepts/agents"
+    selector: "main"
+    max_depth: 2
+  
+  # Supported Knowledge Sources Reference
+  supported_types:
+    type: string
+    content: |
+      Supported Knowledge Source Types:
+      - string: Direct string content
+      - text_file: Plain text files (.txt)
+      - pdf: PDF documents
+      - csv: CSV files with structured data
+      - excel: Excel spreadsheets (.xlsx, .xls)
+      - json: JSON files with structured data
+      - web_content: Web pages and documentation
+ 
+  # Writing News Article Guidelines (Nutshell)
+  news_article_guidelines:
+    type: string
+    content: |
+      Purpose: Quick checklist for concise, factual news pieces.
+
+      1) Headline: Specific, active, accurate; no clickbait.
+      2) Lede: Deliver the 5W+H in 1–2 sentences; what happened and why it matters.
+      3) Nut graf: One short paragraph that frames context and significance.
+      4) Structure: Inverted pyramid—most important to least; keep paragraphs 1–3 sentences.
+      5) Sourcing: Attribute clearly; include at least two independent sources when possible.
+      6) Quotes: Short, distinctive quotes that add voice or authority, not repetition.
+      7) Facts & Numbers: Verify every claim; include precise figures, time, location.
+      8) Balance & Fairness: Represent key sides; note uncertainties/limitations.
+      9) Clarity & Brevity: Plain language; remove jargon; prefer active voice.
+      10) Style: Follow AP-style basics (titles, numbers, dates); consistent tense.
+      11) Context: Provide brief background, prior events, or relevant data links.
+      12) Visuals/Links: Add supporting charts, images, or official docs when available.
+      13) Ethics: Avoid speculation; disclose conflicts; respect privacy and legal constraints.
+      14) SEO/Metadata: Concise slug, descriptive meta; include key terms naturally.
+      15) Final check: Read aloud; fact-check names, figures, quotes; ensure headline matches body.
+
+      Output format (short template):
+      - Headline:
+      - Lede (1–2 sentences):
+      - Nut graf (1 paragraph):
+      - Key facts (bullets):
+      - Source list:
+      - Context/links:
