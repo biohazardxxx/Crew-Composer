@@ -253,8 +253,8 @@ class ConfigDrivenCrew:
         # Optional manager agent by name from config; ensure present even if disabled
         manager_agent_name = getattr(self._crew_cfg, "manager_agent", None)
         manager_agent_obj = None
-        # Build enabled agents list and map for validation
-        enabled_agent_names = {a.name for a in agents_list}  # type: ignore[attr-defined]
+        # Build enabled agents names for validation without relying on Agent attributes
+        enabled_agent_names = set(built_by_name.keys())
         enabled_task_names = {t_name for t_name, t_cfg in self._tasks.items() if bool(t_cfg.get("enabled", True))}
         for t_name, t_cfg in self._tasks.items():
             if not bool(t_cfg.get("enabled", True)):

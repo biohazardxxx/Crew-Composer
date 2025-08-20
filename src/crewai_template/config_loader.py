@@ -57,6 +57,8 @@ class CrewConfig(BaseModel):
     manager_llm: Optional[str] = Field(default="gpt-4o-mini")
     memory: bool = Field(default=False)
     knowledge: Dict[str, Any] = Field(default_factory=dict)
+    # Optional list of knowledge source keys to load from agents.knowledge.yaml
+    knowledge_sources: Optional[List[str]] = None
     # When true, CLI will kickoff the crew asynchronously
     run_async: bool = Field(default=False)
     # Optional manager agent name from agents.yaml (e.g., 'researcher')

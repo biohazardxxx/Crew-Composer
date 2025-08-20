@@ -25,7 +25,8 @@ console = Console()
 class KnowledgeSourceConfig(BaseModel):
     """Configuration for a knowledge source."""
     
-    name: str
+    # Optional; if omitted we fall back to the YAML key
+    name: Optional[str] = None
     type: str
     content: Optional[str] = None
     file_path: Optional[str] = None
@@ -39,6 +40,8 @@ class KnowledgeSourceConfig(BaseModel):
     metadata_keys: Optional[List[str]] = None
     selector: Optional[str] = None
     max_depth: Optional[int] = 1
+    # Excel-specific optional field present in YAML
+    sheet_name: Optional[str] = None
 
 
 class KnowledgeSourcesConfig(BaseModel):
@@ -108,115 +111,143 @@ class KnowledgeLoader:
     ) -> Optional[BaseKnowledgeSource]:
         """Create a specific knowledge source based on type."""
         
+        source_name = config.name or name
+        
         if config.type == "string":
-            return self._create_string_source(config)
+            return self._create_string_source(source_name, config)
         elif config.type == "text_file":
-            return self._create_text_file_source(config)
+            return self._create_text_file_source(source_name, config)
         elif config.type == "pdf":
-            return self._create_pdf_source(config)
+            return self._create_pdf_source(source_name, config)
         elif config.type == "csv":
-            return self._create_csv_source(config)
+            return self._create_csv_source(source_name, config)
         elif config.type == "excel":
-            return self._create_excel_source(config)
+            return self._create_excel_source(source_name, config)
         elif config.type == "json":
-            return self._create_json_source(config)
+            return self._create_json_source(source_name, config)
         elif config.type == "web_content":
-            return self._create_web_content_source(config)
+            return self._create_web_content_source(source_name, config)
         else:
             console.print(f"[yellow]Unsupported knowledge source type: {config.type}[/yellow]")
             return None
     
-    def _create_string_source(self, config: KnowledgeSourceConfig) -> StringKnowledgeSource:
+    def _create_string_source(self, source_name: str, config: KnowledgeSourceConfig) -> StringKnowledgeSource:
         """Create a string knowledge source."""
         if not config.content:
             raise ValueError("String knowledge source requires 'content'")
         
         return StringKnowledgeSource(
             content=config.content,
-            metadata={"name": config.name, "type": "string"}
+            metadata={"name": source_name, "type": "string"}
         )
     
-    def _create_text_file_source(self, config: KnowledgeSourceConfig) -> TextFileKnowledgeSource:
+    def _create_text_file_source(self, source_name: str, config: KnowledgeSourceConfig) -> TextFileKnowledgeSource:
         """Create a text file knowledge source."""
         if not config.file_path:
             raise ValueError("Text file knowledge source requires 'file_path'")
         
-        file_path = self.root / config.file_path
+        file_path = (self.root / config.file_path).resolve()
         if not file_path.exists():
             raise FileNotFoundError(f"Text file not found: {file_path}")
+        # CrewAI expects paths relative to the knowledge dir; normalize when applicable
+        try:
+            rel_to_knowledge = file_path.relative_to(self.knowledge_dir)
+            path_to_use = str(rel_to_knowledge)
+        except ValueError:
+            path_to_use = str(file_path)
         
         return TextFileKnowledgeSource(
-            file_path=str(file_path),
+            file_path=path_to_use,
             encoding=config.encoding or "utf-8",
-            metadata={"name": config.name, "type": "text_file"}
+            metadata={"name": source_name, "type": "text_file"}
         )
     
-    def _create_pdf_source(self, config: KnowledgeSourceConfig) -> PDFKnowledgeSource:
+    def _create_pdf_source(self, source_name: str, config: KnowledgeSourceConfig) -> PDFKnowledgeSource:
         """Create a PDF knowledge source."""
         if not config.file_path:
             raise ValueError("PDF knowledge source requires 'file_path'")
         
-        file_path = self.root / config.file_path
+        file_path = (self.root / config.file_path).resolve()
         if not file_path.exists():
             raise FileNotFoundError(f"PDF file not found: {file_path}")
+        try:
+            rel_to_knowledge = file_path.relative_to(self.knowledge_dir)
+            path_to_use = str(rel_to_knowledge)
+        except ValueError:
+            path_to_use = str(file_path)
         
         return PDFKnowledgeSource(
-            file_path=str(file_path),
+            file_path=path_to_use,
             chunk_size=config.chunk_size or 1000,
             chunk_overlap=config.chunk_overlap or 200,
-            metadata={"name": config.name, "type": "pdf"}
+            metadata={"name": source_name, "type": "pdf"}
         )
     
-    def _create_csv_source(self, config: KnowledgeSourceConfig) -> CSVKnowledgeSource:
+    def _create_csv_source(self, source_name: str, config: KnowledgeSourceConfig) -> CSVKnowledgeSource:
         """Create a CSV knowledge source."""
         if not config.file_path:
             raise ValueError("CSV knowledge source requires 'file_path'")
         
-        file_path = self.root / config.file_path
+        file_path = (self.root / config.file_path).resolve()
         if not file_path.exists():
             raise FileNotFoundError(f"CSV file not found: {file_path}")
+        try:
+            rel_to_knowledge = file_path.relative_to(self.knowledge_dir)
+            path_to_use = str(rel_to_knowledge)
+        except ValueError:
+            path_to_use = str(file_path)
         
         return CSVKnowledgeSource(
-            file_path=str(file_path),
+            file_path=path_to_use,
             source_column=config.source_column,
             metadata_columns=config.metadata_columns or [],
-            metadata={"name": config.name, "type": "csv"}
+            metadata={"name": source_name, "type": "csv"}
         )
     
-    def _create_excel_source(self, config: KnowledgeSourceConfig) -> ExcelKnowledgeSource:
+    def _create_excel_source(self, source_name: str, config: KnowledgeSourceConfig) -> ExcelKnowledgeSource:
         """Create an Excel knowledge source."""
         if not config.file_path:
             raise ValueError("Excel knowledge source requires 'file_path'")
         
-        file_path = self.root / config.file_path
+        file_path = (self.root / config.file_path).resolve()
         if not file_path.exists():
             raise FileNotFoundError(f"Excel file not found: {file_path}")
+        try:
+            rel_to_knowledge = file_path.relative_to(self.knowledge_dir)
+            path_to_use = str(rel_to_knowledge)
+        except ValueError:
+            path_to_use = str(file_path)
         
         return ExcelKnowledgeSource(
-            file_path=str(file_path),
+            file_path=path_to_use,
             source_column=config.source_column,
             metadata_columns=config.metadata_columns or [],
             sheet_name=config.sheet_name,
-            metadata={"name": config.name, "type": "excel"}
+            metadata={"name": source_name, "type": "excel"}
         )
     
-    def _create_json_source(self, config: KnowledgeSourceConfig) -> JSONKnowledgeSource:
+    def _create_json_source(self, source_name: str, config: KnowledgeSourceConfig) -> JSONKnowledgeSource:
         """Create a JSON knowledge source."""
         if not config.file_path:
             raise ValueError("JSON knowledge source requires 'file_path'")
         
-        file_path = self.root / config.file_path
+        file_path = (self.root / config.file_path).resolve()
         if not file_path.exists():
             raise FileNotFoundError(f"JSON file not found: {file_path}")
+        try:
+            rel_to_knowledge = file_path.relative_to(self.knowledge_dir)
+            path_to_use = str(rel_to_knowledge)
+        except ValueError:
+            path_to_use = str(file_path)
         
         return JSONKnowledgeSource(
-            file_path=str(file_path),
+            file_path=path_to_use,
             content_key=config.content_key,
             metadata_keys=config.metadata_keys or [],
-            metadata={"name": config.name, "type": "json"}
+            metadata={"name": source_name, "type": "json"}
         )
     
-    def _create_web_content_source(self, config: KnowledgeSourceConfig) -> Optional[BaseKnowledgeSource]:
+    def _create_web_content_source(self, source_name: str, config: KnowledgeSourceConfig) -> Optional[BaseKnowledgeSource]:
         """Create a web content knowledge source."""
         try:
             from crewai.knowledge.source.crew_docling_source import CrewDoclingSource
@@ -228,7 +259,7 @@ class KnowledgeLoader:
                 file_paths=config.urls,
                 selector=config.selector,
                 max_depth=config.max_depth or 1,
-                metadata={"name": config.name, "type": "web_content"}
+                metadata={"name": source_name, "type": "web_content"}
             )
         except ImportError:
             console.print(
@@ -238,7 +269,10 @@ class KnowledgeLoader:
             return None
 
 
-def load_knowledge_config(root: Path) -> List[BaseKnowledgeSource]:
-    """Load knowledge sources from configuration."""
+def load_knowledge_config(root: Path, selected_sources: Optional[List[str]] = None) -> List[BaseKnowledgeSource]:
+    """Load knowledge sources from configuration.
+
+    If selected_sources is provided, only those sources (by key) will be loaded.
+    """
     loader = KnowledgeLoader(root)
-    return loader.load_knowledge_sources()
+    return loader.load_knowledge_sources(selected_sources=selected_sources)
