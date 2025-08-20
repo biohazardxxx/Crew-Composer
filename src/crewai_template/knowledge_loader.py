@@ -30,6 +30,7 @@ class KnowledgeSourceConfig(BaseModel):
     type: str
     content: Optional[str] = None
     file_path: Optional[str] = None
+    file_paths: Optional[List[str]] = None
     urls: Optional[List[str]] = None
     encoding: Optional[str] = "utf-8"
     chunk_size: Optional[int] = 1000
@@ -130,6 +131,23 @@ class KnowledgeLoader:
         else:
             console.print(f"[yellow]Unsupported knowledge source type: {config.type}[/yellow]")
             return None
+
+    def _normalize_to_knowledge_rel(self, path_str: str) -> str:
+        """Return a path relative to knowledge/ when inside it, else absolute string."""
+        file_path = (self.root / path_str).resolve() if not Path(path_str).is_absolute() else Path(path_str).resolve()
+        try:
+            rel = file_path.relative_to(self.knowledge_dir)
+            return str(rel)
+        except ValueError:
+            return str(file_path)
+
+    def _prefer_file_paths(self, cls, single_kw_name: str, file_paths: List[str], **kwargs):
+        """Try to instantiate source with file_paths, fallback to legacy single path kw on TypeError."""
+        try:
+            return cls(file_paths=file_paths, **kwargs)
+        except TypeError:
+            # Fallback to first path via legacy kw
+            return cls(**{single_kw_name: file_paths[0]}, **kwargs)
     
     def _create_string_source(self, source_name: str, config: KnowledgeSourceConfig) -> StringKnowledgeSource:
         """Create a string knowledge source."""
@@ -143,109 +161,91 @@ class KnowledgeLoader:
     
     def _create_text_file_source(self, source_name: str, config: KnowledgeSourceConfig) -> TextFileKnowledgeSource:
         """Create a text file knowledge source."""
-        if not config.file_path:
-            raise ValueError("Text file knowledge source requires 'file_path'")
-        
-        file_path = (self.root / config.file_path).resolve()
-        if not file_path.exists():
-            raise FileNotFoundError(f"Text file not found: {file_path}")
-        # CrewAI expects paths relative to the knowledge dir; normalize when applicable
-        try:
-            rel_to_knowledge = file_path.relative_to(self.knowledge_dir)
-            path_to_use = str(rel_to_knowledge)
-        except ValueError:
-            path_to_use = str(file_path)
-        
-        return TextFileKnowledgeSource(
-            file_path=path_to_use,
+        paths = config.file_paths or ([config.file_path] if config.file_path else None)
+        if not paths:
+            raise ValueError("Text file knowledge source requires 'file_paths' or 'file_path'")
+        normalized = [self._normalize_to_knowledge_rel(p) for p in paths]
+        # Existence check on first element (best-effort)
+        first_abs = (self.root / normalized[0]).resolve() if not Path(normalized[0]).is_absolute() else Path(normalized[0])
+        if not first_abs.exists():
+            raise FileNotFoundError(f"Text file not found: {first_abs}")
+        return self._prefer_file_paths(
+            TextFileKnowledgeSource,
+            "file_path",
+            normalized,
             encoding=config.encoding or "utf-8",
-            metadata={"name": source_name, "type": "text_file"}
+            metadata={"name": source_name, "type": "text_file"},
         )
     
     def _create_pdf_source(self, source_name: str, config: KnowledgeSourceConfig) -> PDFKnowledgeSource:
         """Create a PDF knowledge source."""
-        if not config.file_path:
-            raise ValueError("PDF knowledge source requires 'file_path'")
-        
-        file_path = (self.root / config.file_path).resolve()
-        if not file_path.exists():
-            raise FileNotFoundError(f"PDF file not found: {file_path}")
-        try:
-            rel_to_knowledge = file_path.relative_to(self.knowledge_dir)
-            path_to_use = str(rel_to_knowledge)
-        except ValueError:
-            path_to_use = str(file_path)
-        
-        return PDFKnowledgeSource(
-            file_path=path_to_use,
+        paths = config.file_paths or ([config.file_path] if config.file_path else None)
+        if not paths:
+            raise ValueError("PDF knowledge source requires 'file_paths' or 'file_path'")
+        normalized = [self._normalize_to_knowledge_rel(p) for p in paths]
+        first_abs = (self.root / normalized[0]).resolve() if not Path(normalized[0]).is_absolute() else Path(normalized[0])
+        if not first_abs.exists():
+            raise FileNotFoundError(f"PDF file not found: {first_abs}")
+        return self._prefer_file_paths(
+            PDFKnowledgeSource,
+            "file_path",
+            normalized,
             chunk_size=config.chunk_size or 1000,
             chunk_overlap=config.chunk_overlap or 200,
-            metadata={"name": source_name, "type": "pdf"}
+            metadata={"name": source_name, "type": "pdf"},
         )
     
     def _create_csv_source(self, source_name: str, config: KnowledgeSourceConfig) -> CSVKnowledgeSource:
         """Create a CSV knowledge source."""
-        if not config.file_path:
-            raise ValueError("CSV knowledge source requires 'file_path'")
-        
-        file_path = (self.root / config.file_path).resolve()
-        if not file_path.exists():
-            raise FileNotFoundError(f"CSV file not found: {file_path}")
-        try:
-            rel_to_knowledge = file_path.relative_to(self.knowledge_dir)
-            path_to_use = str(rel_to_knowledge)
-        except ValueError:
-            path_to_use = str(file_path)
-        
-        return CSVKnowledgeSource(
-            file_path=path_to_use,
+        paths = config.file_paths or ([config.file_path] if config.file_path else None)
+        if not paths:
+            raise ValueError("CSV knowledge source requires 'file_paths' or 'file_path'")
+        normalized = [self._normalize_to_knowledge_rel(p) for p in paths]
+        first_abs = (self.root / normalized[0]).resolve() if not Path(normalized[0]).is_absolute() else Path(normalized[0])
+        if not first_abs.exists():
+            raise FileNotFoundError(f"CSV file not found: {first_abs}")
+        return self._prefer_file_paths(
+            CSVKnowledgeSource,
+            "file_path",
+            normalized,
             source_column=config.source_column,
             metadata_columns=config.metadata_columns or [],
-            metadata={"name": source_name, "type": "csv"}
+            metadata={"name": source_name, "type": "csv"},
         )
     
     def _create_excel_source(self, source_name: str, config: KnowledgeSourceConfig) -> ExcelKnowledgeSource:
         """Create an Excel knowledge source."""
-        if not config.file_path:
-            raise ValueError("Excel knowledge source requires 'file_path'")
-        
-        file_path = (self.root / config.file_path).resolve()
-        if not file_path.exists():
-            raise FileNotFoundError(f"Excel file not found: {file_path}")
-        try:
-            rel_to_knowledge = file_path.relative_to(self.knowledge_dir)
-            path_to_use = str(rel_to_knowledge)
-        except ValueError:
-            path_to_use = str(file_path)
-        
-        return ExcelKnowledgeSource(
-            file_path=path_to_use,
+        paths = config.file_paths or ([config.file_path] if config.file_path else None)
+        if not paths:
+            raise ValueError("Excel knowledge source requires 'file_paths' or 'file_path'")
+        normalized = [self._normalize_to_knowledge_rel(p) for p in paths]
+        first_abs = (self.root / normalized[0]).resolve() if not Path(normalized[0]).is_absolute() else Path(normalized[0])
+        if not first_abs.exists():
+            raise FileNotFoundError(f"Excel file not found: {first_abs}")
+        return self._prefer_file_paths(
+            ExcelKnowledgeSource,
+            "file_path",
+            normalized,
             source_column=config.source_column,
             metadata_columns=config.metadata_columns or [],
             sheet_name=config.sheet_name,
-            metadata={"name": source_name, "type": "excel"}
+            metadata={"name": source_name, "type": "excel"},
         )
     
     def _create_json_source(self, source_name: str, config: KnowledgeSourceConfig) -> JSONKnowledgeSource:
         """Create a JSON knowledge source."""
-        if not config.file_path:
-            raise ValueError("JSON knowledge source requires 'file_path'")
-        
-        file_path = (self.root / config.file_path).resolve()
-        if not file_path.exists():
-            raise FileNotFoundError(f"JSON file not found: {file_path}")
+        paths = config.file_paths or ([config.file_path] if config.file_path else None)
+        if not paths:
+            raise ValueError("JSON knowledge source requires 'file_paths' or 'file_path'")
+        normalized = [self._normalize_to_knowledge_rel(p) for p in paths]
+        first_abs = (self.root / normalized[0]).resolve() if not Path(normalized[0]).is_absolute() else Path(normalized[0])
+        if not first_abs.exists():
+            raise FileNotFoundError(f"JSON file not found: {first_abs}")
+        # JSON source historically takes single file; try new then fallback
         try:
-            rel_to_knowledge = file_path.relative_to(self.knowledge_dir)
-            path_to_use = str(rel_to_knowledge)
-        except ValueError:
-            path_to_use = str(file_path)
-        
-        return JSONKnowledgeSource(
-            file_path=path_to_use,
-            content_key=config.content_key,
-            metadata_keys=config.metadata_keys or [],
-            metadata={"name": source_name, "type": "json"}
-        )
+            return JSONKnowledgeSource(file_paths=normalized, content_key=config.content_key, metadata_keys=config.metadata_keys or [], metadata={"name": source_name, "type": "json"})
+        except TypeError:
+            return JSONKnowledgeSource(file_path=normalized[0], content_key=config.content_key, metadata_keys=config.metadata_keys or [], metadata={"name": source_name, "type": "json"})
     
     def _create_web_content_source(self, source_name: str, config: KnowledgeSourceConfig) -> Optional[BaseKnowledgeSource]:
         """Create a web content knowledge source."""

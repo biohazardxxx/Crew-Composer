@@ -17,27 +17,31 @@ knowledge_sources:
   # Text File Knowledge Source
   company_policies:
     type: text_file
-    file_path: "knowledge/company_policies.txt"
+    file_paths:
+    - "company_policies.txt"
     encoding: "utf-8"
   
   # PDF Knowledge Source
   technical_documentation:
     type: pdf
-    file_path: "knowledge/api_documentation.pdf"
+    file_paths:
+    - "api_documentation.pdf"
     chunk_size: 1000
     chunk_overlap: 200
   
   # CSV Knowledge Source
   product_catalog:
     type: csv
-    file_path: "knowledge/products.csv"
+    file_paths:
+    - "products.csv"
     source_column: "description"
     metadata_columns: ["product_id", "category", "price"]
   
   # Excel Knowledge Source
   sales_data:
     type: excel
-    file_path: "knowledge/sales_report.xlsx"
+    file_paths:
+    - "sales_report.xlsx"
     sheet_name: "Q4_2024"
     source_column: "notes"
     metadata_columns: ["region", "amount", "date"]
@@ -45,7 +49,8 @@ knowledge_sources:
   # JSON Knowledge Source
   api_endpoints:
     type: json
-    file_path: "knowledge/api_endpoints.json"
+    file_paths:
+    - "api_endpoints.json"
     content_key: "documentation"
     metadata_keys: ["endpoint", "method", "version"]
   
