@@ -3,10 +3,7 @@
 web_content_research_task:
   description: >
     Conduct a thorough research about {topic}.
-    Make sure you find any interesting and relevant information and get it summarized.Then save the final markdown report to output/report.md.
-    Prefer using the file_write tool configured for the 'output' directory with:
-      - filename: "report.md"
-      - content: <your generated markdown>
+    Make sure you find any interesting and relevant information and delegate to create the output file.
   expected_output: >
     A concise list of the 5 most relevant bullet points about {topic}.
   

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Any, Dict, List, Mapping, MutableMapping, Optional
+from typing import Any, Dict, List, Mapping, MutableMapping, Optional, Union
 
 import yaml
 from pydantic import BaseModel, Field
@@ -68,8 +68,8 @@ class CrewConfig(BaseModel):
     agents: List[str] = Field(default_factory=list)
     # Preferred task execution order for this crew
     task_order: List[str] = Field(default_factory=list)
-    # Map each task name to an agent name
-    task_agent_map: Dict[str, str] = Field(default_factory=dict)
+    # Map each task name to one or more agent names
+    task_agent_map: Dict[str, Union[str, List[str]] ] = Field(default_factory=dict)
     tools_files: List[str] = Field(default_factory=lambda: [
         "config/tools.yaml",
         "config/mcp_tools.yaml",

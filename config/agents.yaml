@@ -6,7 +6,7 @@ researcher:
   goal: "Find concise facts on {topic}"
   backstory: "Efficient analyst focused on brevity."
   verbose: false
-  allow_delegation: false
+  allow_delegation: true
   enabled: true
   tool_names: ["web_rag","file_write"]
   # LLM alias recognized by CrewAI/llms(), API key via OPENAI_API_KEY
@@ -25,11 +25,11 @@ researcher:
   # max_rpm: null
   max_iter: 5
 
-reporting_analyst:
+report_writer:
   role: "Writer"
-  goal: "Write a brief report on {topic}"
+  goal: "Write a brief report on the provided content as output file"
   backstory: "Clear, concise writer."
-  verbose: false
+  verbose: true
   allow_delegation: false
   enabled: true
   tool_names: ["file_read","file_write"]
@@ -40,7 +40,7 @@ summary_analyst:
   role: "Summarizer"
   goal: "Summarize provided content briefly"
   backstory: "Expert at concise summaries."
-  verbose: false
+  verbose: true
   allow_delegation: false
   enabled: false
   tool_names: ["file_read","file_write"]

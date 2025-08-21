@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import inspect
 from pathlib import Path
-from typing import List, Optional, Dict
+from typing import List, Optional, Dict, Any
 
 from crewai import Agent, Crew, Process, Task, CrewOutput
 from crewai.project import CrewBase, crew, task
@@ -41,7 +41,7 @@ class ConfigDrivenCrew:
 
     # === Agents === (built dynamically in crew() from YAML; no hardcoded @agent methods)
 
-    def _build_task_generic(self, name: str, agent_obj: Optional[Agent] = None) -> Task:
+    def _build_task_generic(self, name: str, agent_obj: Optional[Agent] = None, context_objs: Optional[List[Task]] = None, suppress_output_file: bool = False) -> Task:
         """Build a Task from YAML config by name and optionally attach an Agent.
 
         Uses CrewBase-populated `self.tasks_config` when available as the base
@@ -66,20 +66,24 @@ class ConfigDrivenCrew:
         # Strip keys that are not part of Task config API or that we'll control
         payload.pop("enabled", None)
         payload.pop("tools", None)  # keep task-level tools disabled (agent-level only)
+        if suppress_output_file:
+            payload.pop("output_file", None)
         # Ensure we don't pass a stale string agent from YAML; we'll attach instance
         if agent_obj is not None:
             payload.pop("agent", None)
         # Decide how to attach the agent (constructor vs config injection)
         use_ctor_agent = False
-        if agent_obj is not None:
-            try:
-                sig = inspect.signature(Task.__init__)
-                use_ctor_agent = ("agent" in sig.parameters)
-            except Exception:
-                use_ctor_agent = False
-            if not use_ctor_agent:
-                # Compatibility: insert instance into config
-                payload["agent"] = agent_obj  # type: ignore[assignment]
+        can_pass_context = False
+        try:
+            sig = inspect.signature(Task.__init__)
+            use_ctor_agent = (agent_obj is not None and ("agent" in sig.parameters))
+            can_pass_context = ("context" in sig.parameters)
+        except Exception:
+            use_ctor_agent = False
+            can_pass_context = False
+        if agent_obj is not None and not use_ctor_agent:
+            # Compatibility: insert instance into config
+            payload["agent"] = agent_obj  # type: ignore[assignment]
         # Validate required fields early to provide a clearer error
         if not isinstance(payload, dict) or "description" not in payload or "expected_output" not in payload:
             raise ValueError(
@@ -87,10 +91,23 @@ class ConfigDrivenCrew:
                 f"with 'description' and 'expected_output'. If you recently renamed it, update "
                 f"crew.yaml task_order and any 'context' references in other tasks."
             )
-        # Construct the Task
+        # Construct the Task with optional context objects
+        if use_ctor_agent and can_pass_context and context_objs:
+            return Task(config=payload, agent=agent_obj, context=context_objs)  # type: ignore[arg-type]
         if use_ctor_agent and agent_obj is not None:
-            return Task(config=payload, agent=agent_obj)  # type: ignore[arg-type]
-        return Task(config=payload)
+            t = Task(config=payload, agent=agent_obj)  # type: ignore[arg-type]
+        elif can_pass_context and context_objs:
+            t = Task(config=payload, context=context_objs)
+        else:
+            t = Task(config=payload)
+        # As a fallback, try to set context attribute post-construction if supported
+        if context_objs:
+            try:
+                existing = list(getattr(t, "context", []) or [])
+                t.context = existing + context_objs  # type: ignore[attr-defined]
+            except Exception:
+                pass
+        return t
 
     
 
@@ -232,56 +249,97 @@ class ConfigDrivenCrew:
         # Build a working list of (name, cfg) preserving YAML order
         yaml_order: List[str] = [t_name for t_name, _ in self._tasks.items()]
         order = preferred_order if preferred_order else yaml_order
-        # Build mapping from task -> agent name
+        # Build mapping from task -> agent name(s); allow string or list values
         try:
-            task_agent_map: Dict[str, str] = dict(getattr(self._crew_cfg, "task_agent_map", {}) or {})
+            task_agent_map: Dict[str, Any] = dict(getattr(self._crew_cfg, "task_agent_map", {}) or {})
         except Exception:
             task_agent_map = {}
 
         # Precompute enabled task names from YAML for validation
         enabled_task_names = {t_name for t_name, t_cfg in self._tasks.items() if bool(t_cfg.get("enabled", True))}
 
+        # Track built Task objects by base name for resolving YAML context to Task instances
+        built_tasks_by_name: Dict[str, List[Task]] = {}
+
+        def _resolve_context_objs(names: List[str]) -> List[Task]:
+            out: List[Task] = []
+            for nm in names:
+                try:
+                    lst = built_tasks_by_name.get(str(nm), [])
+                    if lst:
+                        out.append(lst[-1])
+                except Exception:
+                    continue
+            return out
+
         for t_name in order:
             t_cfg = self._tasks.get(t_name)
             if t_cfg is None:
                 console.print(f"[yellow]Warning: crew.task_order includes unknown task '{t_name}'[/yellow]")
                 continue
-            # If a preferred order is provided, we consider it authoritative and run even if task YAML has enabled: false
-            if not preferred_order:
-                # Only enforce enabled flag when using default YAML order
-                if not bool(t_cfg.get("enabled", True)):
-                    continue
-            # Resolve agent to attach: prefer crew-level map, else fallback to task YAML 'agent'
-            agent_name = task_agent_map.get(t_name) or str(t_cfg.get("agent", ""))
-            agent_obj: Optional[Agent] = None
-            if agent_name:
+            # Determine agents for this task (single or list)
+            mapping_val = task_agent_map.get(t_name, None)
+            agent_names: List[str]
+            if isinstance(mapping_val, (list, tuple)):
+                agent_names = [str(a).strip() for a in mapping_val if str(a).strip()]
+            elif isinstance(mapping_val, str) and mapping_val.strip():
+                agent_names = [mapping_val.strip()]
+            else:
+                # Default to the first crew agent to satisfy Crew validation in sequential process
+                if agents_list:
+                    # Try to get the first agent's declared name
+                    first_cfg = getattr(agents_list[0], "config", {}) or {}
+                    first_name = first_cfg.get("name") or next(iter(built_by_name.keys()), "")
+                    if first_name:
+                        console.print(f"[yellow]Note: no agent mapping for task '{t_name}'; defaulting to first crew agent '{first_name}'[/yellow]")
+                        agent_names = [str(first_name)]
+                    else:
+                        agent_names = []
+                else:
+                    agent_names = []
+
+            # Resolve YAML-declared context names to built Task objects (latest instances)
+            declared_ctx_names: List[str] = list(t_cfg.get("context", []) or [])
+            base_ctx_objs: List[Task] = _resolve_context_objs(declared_ctx_names)
+
+            # Build one or more concrete tasks based on agent_names. If multiple,
+            # chain them so each subsequent clone receives the previous clone as context.
+            prev_clone: Optional[Task] = None
+            if not agent_names:
+                t_obj = self._build_task_generic(t_name, agent_obj=None, context_objs=base_ctx_objs)
+                tasks_list.append(t_obj)
+                built_tasks_by_name.setdefault(t_name, []).append(t_obj)
+                continue
+
+            for idx, agent_name in enumerate(agent_names):
                 agent_obj = built_by_name.get(agent_name)
                 if agent_obj is None:
                     # If agent wasn't pre-built (not in crew.agents), try to build it to avoid a hard failure
-                    if agent_name in self._agents and bool(self._agents[agent_name].get("enabled", True)):
+                    agent_cfg = self._agents.get(agent_name, {})
+                    if agent_cfg and bool(agent_cfg.get("enabled", True)):
                         console.print(f"[yellow]Note: building agent '{agent_name}' referenced by task '{t_name}' but not listed in crew.agents[/yellow]")
                         agent_obj = self._build_agent_generic(agent_name)
                         built_by_name[agent_name] = agent_obj
                         agents_list.append(agent_obj)
                     else:
                         console.print(f"[yellow]Warning: Task '{t_name}' references agent '{agent_name}' which is missing or disabled[/yellow]")
-                        agent_obj = None
+                        continue
 
-            # Validate context task references
-            context_tasks = t_cfg.get("context", [])
-            for ctx_task in context_tasks:
-                if str(ctx_task) not in enabled_task_names and (preferred_order and str(ctx_task) not in order):
-                    console.print(f"[yellow]Warning: Task '{t_name}' references context task '{ctx_task}' which is missing or disabled[/yellow]")
+                ctx_objs: List[Task] = list(base_ctx_objs)
+                if idx > 0 and prev_clone is not None:
+                    ctx_objs.append(prev_clone)
 
-            tasks_list.append(self._build_task_generic(t_name, agent_obj=agent_obj))
-
-        # Fallbacks: if nothing constructed, try enabled YAML tasks; else final hardcoded defaults
-        if not tasks_list:
-            for t_name, t_cfg in self._tasks.items():
-                if bool(t_cfg.get("enabled", True)):
-                    agent_name = str(t_cfg.get("agent", ""))
-                    agent_obj = built_by_name.get(agent_name)
-                    tasks_list.append(self._build_task_generic(t_name, agent_obj=agent_obj))
+                # Only final clone should keep any YAML-defined output_file to avoid multiple writes
+                is_last = (idx == len(agent_names) - 1)
+                t_obj = self._build_task_generic(
+                    t_name,
+                    agent_obj=agent_obj,
+                    context_objs=ctx_objs,
+                    suppress_output_file=(not is_last),
+                )
+                tasks_list.append(t_obj)
+                built_tasks_by_name.setdefault(t_name, []).append(t_obj)
+                prev_clone = t_obj
         if not tasks_list:
             raise ValueError(
                 "No tasks configured. Ensure config/tasks.yaml has at least one enabled task "

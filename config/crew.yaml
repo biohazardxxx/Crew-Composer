@@ -30,14 +30,14 @@ tools_files:
 # Only these agents will be instantiated for this crew
 agents:
   - researcher
-  - reporting_analyst
+  - report_writer
 
 # Explicit task execution order for this crew
 task_order:
   - web_content_research_task
-  #- reporting_task
+  - reporting_task
 
 # Explicitly map tasks to agents
 task_agent_map:
   web_content_research_task: researcher
-  #reporting_task: reporting_analyst
+  reporting_task: [researcher, report_writer]

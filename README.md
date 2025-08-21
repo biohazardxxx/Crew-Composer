@@ -22,6 +22,18 @@ A modular, configuration-driven template for building CrewAI apps that are easy 
 │  ├─ crew.yaml
 │  ├─ tools.yaml
 │  └─ mcp_tools.yaml
+├─ docs/
+│  ├─ README.md
+│  ├─ installation.md
+│  ├─ getting-started.md
+│  ├─ best-practices.md
+│  ├─ configuration.md
+│  ├─ multi-agent-mapping.md
+│  ├─ cli.md
+│  ├─ tools-and-mcp.md
+│  ├─ knowledge-sources.md
+│  ├─ troubleshooting.md
+│  └─ faq.md
 ├─ src/
 │  └─ crewai_template/
 │     ├─ __init__.py
@@ -33,7 +45,19 @@ A modular, configuration-driven template for building CrewAI apps that are easy 
 ├─ .env.example
 ├─ pyproject.toml
 └─ README.md
-```
+
+## Documentation
+- [Docs Home](docs/README.md)
+- [Installation](docs/installation.md)
+- [Getting Started](docs/getting-started.md)
+- [Best Practices](docs/best-practices.md)
+- [Configuration Guide](docs/configuration.md)
+- [Multi-Agent Task Mapping](docs/multi-agent-mapping.md)
+- [CLI Usage](docs/cli.md)
+- [Tools and MCP Integration](docs/tools-and-mcp.md)
+- [Knowledge Sources](docs/knowledge-sources.md)
+- [Troubleshooting](docs/troubleshooting.md)
+- [FAQ](docs/faq.md)
 
 ## Setup (Windows PowerShell)
 
@@ -114,6 +138,75 @@ task_agent_map:
 ```
 
 If `task_agent_map` is omitted, the template will default tasks to the first agent listed in `crew.yaml -> agents`.
+
+### Collaborative multi-agent execution (list mapping and pipelines)
+
+This template supports collaborative work in two ways:
+
+- Single-agent-per-task (default). Map each task to one agent.
+- Multi-agent list mapping. Map a task to a list of agents; the task is cloned per agent in that order. The previous clone is passed as context to the next, and only the final clone writes to any `output_file` to avoid duplicates.
+
+Recommended pipeline pattern (Option B): keep tasks focused and connect them via `context`.
+
+Example:
+
+```yaml
+# config/tasks.yaml
+web_content_research_task:
+  description: >
+    Conduct thorough research about {topic}.
+  expected_output: >
+    A concise list of the 5 most relevant bullet points about {topic}.
+
+reporting_task:
+  description: >
+    Use ONLY the context from web_content_research_task and turn these into a brief, clear section as bullet points.
+    Then save the final markdown report to output/report.md.
+  expected_output: >
+    A markdown report (no code fences) with a short introduction and one section per bullet point.
+  context:
+    - web_content_research_task
+  output_file: output/report.md
+```
+
+```yaml
+# config/crew.yaml
+agents:
+  - researcher
+  - report_writer
+
+task_order:
+  - web_content_research_task
+  - reporting_task
+
+task_agent_map:
+  web_content_research_task: researcher
+  reporting_task: [researcher, report_writer]
+```
+
+Behavior:
+
+- The crew runs `web_content_research_task` with `researcher`.
+- It then runs `reporting_task` twice: first with `researcher` (receives `web_content_research_task` as context), then with `report_writer` (receives both the research context and the first clone’s output).
+- Only the final clone (`report_writer`) writes `output_file: output/report.md`.
+
+Alternate single-task variant (Option A):
+
+```yaml
+# config/crew.yaml
+task_agent_map:
+  web_content_research_task: [researcher, report_writer]
+
+# config/tasks.yaml
+web_content_research_task:
+  ...
+  output_file: output/report.md
+```
+
+Notes:
+
+- In Option A, the first clone (researcher) will not write; the final clone (report_writer) will.
+- Delegation remains optional; list mapping does not require `allow_delegation` to be true.
 
 ## CLI Usage
 
