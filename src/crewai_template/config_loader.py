@@ -63,6 +63,13 @@ class CrewConfig(BaseModel):
     run_async: bool = Field(default=False)
     # Optional manager agent name from agents.yaml (e.g., 'researcher')
     manager_agent: Optional[str] = None
+    # Crew-level orchestration (config-driven)
+    # If provided, limit built agents to this allowlist
+    agents: List[str] = Field(default_factory=list)
+    # Preferred task execution order for this crew
+    task_order: List[str] = Field(default_factory=list)
+    # Map each task name to an agent name
+    task_agent_map: Dict[str, str] = Field(default_factory=dict)
     tools_files: List[str] = Field(default_factory=lambda: [
         "config/tools.yaml",
         "config/mcp_tools.yaml",

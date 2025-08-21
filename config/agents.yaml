@@ -2,45 +2,47 @@
 # You can add more agents by following this structure.
 
 researcher:
-  role: "Market Research Analyst"
-  goal: "Provide up-to-date analysis about {topic}"
-  backstory: "An expert analyst with a keen eye for market trends."
-  verbose: true
+  role: "Researcher"
+  goal: "Find concise facts on {topic}"
+  backstory: "Efficient analyst focused on brevity."
+  verbose: false
   allow_delegation: false
   enabled: true
-  tool_names: ["web_rag","scrape_website","scrape_element"]
+  tool_names: ["web_rag","file_write"]
   # LLM alias recognized by CrewAI/llms(), API key via OPENAI_API_KEY
   llm: gpt-4o-mini
   # Optional: LLM temperature (0-2), defaults to CrewAI default
-  llm_temperature: 0.2
+  llm_temperature: 0
   # Optional: enable built-in caching for this agent (supported CrewAI versions only)
   # cache: true
-  # Optional: disable interactive human input prompts for this agent (if supported)
-  # human_input: false
+  # Optional: enable interactive human input prompts for this agent (if supported)
+  # human_input: true
   # Optional: allow the agent to execute code (ensure sandboxing as needed)
   # allow_code_execution: false
   # Optional: enable multimodal capabilities if supported by the underlying LLM
   # multimodal: true
   # Optional: rate limiting and iteration control
   # max_rpm: null
-  # max_iter: 25
+  max_iter: 5
 
 reporting_analyst:
-  role: "Content Writer"
-  goal: "Craft exceptional, clear reports about {topic}"
-  backstory: "A skilled writer with a passion for new and promising trends."
-  verbose: true
+  role: "Writer"
+  goal: "Write a brief report on {topic}"
+  backstory: "Clear, concise writer."
+  verbose: false
   allow_delegation: false
   enabled: true
-  tool_names: ["file_read", "dir_read"]
-  llm: gpt-4o
+  tool_names: ["file_read","file_write"]
+  llm: gpt-4o-mini
+  max_iter: 5
 
 summary_analyst:
-  role: "Content Summarizer"
-  goal: "Summarize the provided content"
-  backstory: "A skilled writer with an exceptional skill to summarize reports."
-  verbose: true
+  role: "Summarizer"
+  goal: "Summarize provided content briefly"
+  backstory: "Expert at concise summaries."
+  verbose: false
   allow_delegation: false
-  enabled: true
-  tool_names: ["file_read", "dir_read"]
-  llm: gpt-4o
+  enabled: false
+  tool_names: ["file_read","file_write"]
+  llm: gpt-4o-mini
+  max_iter: 5

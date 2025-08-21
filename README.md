@@ -75,12 +75,45 @@ python -m pip install mcp
 ## Configuration
 
 - `config/agents.yaml`: Roles, goals, backstories, LLMs, and tools per agent.
-- `config/tasks.yaml`: Descriptions, expected outputs, default agent, context deps, and optional `output_file`.
+- `config/tasks.yaml`: Descriptions, expected outputs, context deps, and optional `output_file`.
 - `config/crew.yaml`: Process (`sequential`/`hierarchical`), verbosity, planning, memory, knowledge, and `tools_files` list.
 - `config/tools.yaml`: CrewAi default tool categories with entries `{ name, module, class, enabled, args, env }`.
 - `config/mcp_tools.yaml`: MCP servers and tool wrappers. Disabled by default.
 
 Environment variables in configs use `${VAR}` or `${VAR:default}` and resolve from your `.env` and OS env.
+
+### Renaming tasks safely (config-driven with context)
+
+Tasks and their dependency `context` are fully configuration-driven. CrewAI resolves `context` by calling same-named `@task` methods. This template synthesizes those methods dynamically from YAML at runtime, so you do not need to write hardcoded task functions.
+
+When you rename or add tasks in `config/tasks.yaml`:
+
+- Update `config/crew.yaml -> task_order` to reflect the new names, or remove `task_order` to run in YAML order.
+- Update any `context` arrays in downstream tasks to reference the new task name(s).
+- Ensure each task has the required fields: `description` and `expected_output`.
+
+Notes:
+
+- Task names should be valid Python identifiers (e.g., `web_content_research_task`), which is safest across CrewAI versions.
+- Tasks are selected by `config/crew.yaml -> task_order`. To disable a task, omit it from `task_order`. If `task_order` is omitted, tasks run in YAML order.
+- Map tasks to agents via `config/crew.yaml -> task_agent_map`. If not provided, this template defaults each task to the first crew agent.
+- Agents are listed at the crew level in `config/crew.yaml -> agents` and built from `config/agents.yaml`.
+
+### Task enablement and agent mapping
+
+- Remove per-task `enabled` flags; task selection is driven solely by `crew.yaml -> task_order`.
+- Provide `task_agent_map` to explicitly attach an agent to each task. Example:
+
+```yaml
+task_order:
+  - web_content_research_task
+  - reporting_task
+task_agent_map:
+  web_content_research_task: researcher
+  reporting_task: reporting_analyst
+```
+
+If `task_agent_map` is omitted, the template will default tasks to the first agent listed in `crew.yaml -> agents`.
 
 ## CLI Usage
 
@@ -168,6 +201,7 @@ Notes:
 - **UnsupportedToolError**: A tool name referenced by an agent/task is not defined/enabled.
 - **API key errors**: Check `.env` and environment interpolation in YAML.
 - **`crewai run` cannot find crew**: Confirm `@CrewBase` class exists in `src/crewai_template/crew.py`.
+- **ValidationError: Task missing `description` or `expected_output`**: The task name may have been renamed without updating `task_order`/`context`, or the YAML entry is incomplete. Fix the names and ensure required fields exist.
 
 ## Notes on Extensibility
 

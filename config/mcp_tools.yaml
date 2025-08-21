@@ -40,7 +40,7 @@ servers:
     connect_timeout: 60
 
   - name: code-research
-    enabled: true
+    enabled: false
     transport: stdio
     command: node
     args: ["E:\\MCP_Servers\\code-research-mcp-server\\build\\index.js"]

@@ -1,23 +1,25 @@
 # Tasks configuration (Hello World style)
 
-research_task:
+web_content_research_task:
   description: >
     Conduct a thorough research about {topic}.
-    Make sure you find any interesting and relevant information.
+    Make sure you find any interesting and relevant information and get it summarized.Then save the final markdown report to output/report.md.
+    Prefer using the file_write tool configured for the 'output' directory with:
+      - filename: "report.md"
+      - content: <your generated markdown>
   expected_output: >
-    A list with 5 bullet points of the most relevant information about {topic}.
-  agent: researcher
-  enabled: true
+    A concise list of the 5 most relevant bullet points about {topic}.
+  
 
 reporting_task:
   description: >
-    Review the context you got and expand each topic into a full section for a report.
-    Make sure the report is detailed and contains any and all relevant information.
+    Use ONLY the context from web_content_research_task and turn these into a brief, clear section as bullet points.
+    Then save the final markdown report to output/report.md.
+    Prefer using the file_write tool configured for the 'output' directory with:
+      - filename: "report.md"
+      - content: <your generated markdown>
   expected_output: >
-    A fully fledged report with the main topics, each with a full section of information.
-    Formatted as markdown without '```'
-  agent: reporting_analyst
-  enabled: true
+    A markdown report (no code fences) with a short introduction and one section per bullet point.  
   context:
-    - research_task
+    - web_content_research_task
   output_file: output/report.md

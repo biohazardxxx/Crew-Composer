@@ -12,9 +12,22 @@ tools:
     - name: dir_read
       module: crewai_tools
       class: DirectoryReadTool
+      enabled: false
+      args:
+        directory: output
+
+    - name: file_write
+      module: crewai_tools
+      class: FileWriterTool
       enabled: true
       args:
-        directory: .
+        directory: output
+    - name: dir_search
+      module: crewai_tools
+      class: DirectorySearchTool
+      enabled: false
+      args:
+        directory: output
 
     - name: pdf_search
       module: crewai_tools
@@ -182,6 +195,14 @@ tools:
         port: ${QDRANT_PORT:6333}
         collection_name: ${QDRANT_COLLECTION}
 
+    - name: mysql_search
+      module: crewai_tools
+      class: MySQLSearchTool
+      enabled: false
+      args: 
+        db_uri: mysql://user:password@localhost:3306/mydatabase
+        table_name: mytable
+      
     - name: weaviate_search
       module: crewai_tools
       class: WeaviateVectorSearchTool

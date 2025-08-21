@@ -1,15 +1,17 @@
 # Crew-wide settings and defaults
-process: hierarchical  # options: sequential, hierarchical
-verbose: true
-planning: true
-memory: true
+process: sequential  # options: sequential, hierarchical
+verbose: false
+planning: false
+memory: false
 planning_llm: gpt-4o-mini
-knowledge: {}
 
 # Knowledge sources configuration
 # List of knowledge sources to use from agents.knowledge.yaml
-# Leave empty to use all sources, or specify specific source names
-knowledge_sources: ["news_article_guidelines"]  # e.g. ["user_profile", "company_policies"]
+# Semantics:
+# - omit key or set to ["ALL"] => use all available
+# - [] => use none
+# - [names...] => only those listed
+knowledge_sources: []  # e.g. ["ALL"] or ["user_profile", "company_policies"]
 run_async: false  # when true, CLI runs kickoff asynchronously
 
 # Optional: specify a manager agent by name (must match an agent key in agents.yaml)
@@ -23,3 +25,19 @@ manager_llm: gpt-4o-mini
 tools_files:
   - config/tools.yaml
   - config/mcp_tools.yaml
+
+# Crew-level orchestration (config-driven)
+# Only these agents will be instantiated for this crew
+agents:
+  - researcher
+  - reporting_analyst
+
+# Explicit task execution order for this crew
+task_order:
+  - web_content_research_task
+  #- reporting_task
+
+# Explicitly map tasks to agents
+task_agent_map:
+  web_content_research_task: researcher
+  #reporting_task: reporting_analyst
