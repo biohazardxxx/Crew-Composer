@@ -2,6 +2,22 @@
 
 A modular, configuration-driven composer for building CrewAI apps that are easy to update, extend, and integrate with tools and MCP. Ships with a Typer-based CLI and is compatible with the CrewAI CLI (`crewai run`).
 
+## Table of Contents
+
+- [Features](#features)
+- [Project Structure](#project-structure)
+- [Documentation](#documentation)
+- [Setup (Windows PowerShell)](#setup-windows-powershell)
+- [Configuration](#configuration)
+  - [Renaming tasks safely (config-driven with context)](#renaming-tasks-safely-config-driven-with-context)
+  - [Task enablement and agent mapping](#task-enablement-and-agent-mapping)
+  - [Collaborative multi-agent execution (list mapping and pipelines)](#collaborative-multi-agent-execution-list-mapping-and-pipelines)
+- [CLI Usage](#cli-usage)
+- [MCP Integration](#mcp-integration)
+- [Troubleshooting](#troubleshooting)
+- [Notes on Extensibility](#notes-on-extensibility)
+- [License](#license)
+
 ## Features
 
 - **Config-first**: Define agents, tasks, crew, and tools entirely in YAML under `config/`.
