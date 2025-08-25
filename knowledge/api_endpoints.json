@@ -3,7 +3,7 @@
   "last_updated": "2024-08-20",
   "documentation": {
     "overview": "Complete API documentation for the CrewAI Template system",
-    "base_url": "https://api.crewai-template.com/v1",
+    "base_url": "https://api.crew-composer.com/v1",
     "authentication": "Bearer token required for all endpoints"
   },
   "endpoints": [

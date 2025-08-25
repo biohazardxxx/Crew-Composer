@@ -28,23 +28,23 @@ Copy-Item .env.example .env
 
 ```powershell
 # Validate YAML and tool imports
-crewai-template validate
+crew-composer validate
 
 # List all enabled tools (including MCP-discovered ones)
-crewai-template list-tools
+crew-composer list-tools
 
 # Show merged configs
-crewai-template show-configs
+crew-composer show-configs
 ```
 
 ## Run the example crew
 
 ```powershell
 # Provide dynamic inputs as key=value pairs
-crewai-template run --inputs topic="Hello World"
+crew-composer run --inputs topic="Hello World"
 
 # Or provide JSON
-crewai-template run --inputs-json '{"topic": "Hello World"}'
+crew-composer run --inputs-json '{"topic": "Hello World"}'
 
 # Alternatively, use the CrewAI CLI from project root
 crewai run

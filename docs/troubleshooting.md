@@ -7,9 +7,9 @@
 - __UnsupportedToolError__
   - An agent references a tool name that isn’t enabled/defined.
 - __API key errors__
-  - Set variables in `.env`, e.g., `OPENAI_API_KEY`, and re-run `crewai-template validate`.
+  - Set variables in `.env`, e.g., `OPENAI_API_KEY`, and re-run `crew-composer validate`.
 - __`crewai run` cannot find crew__
-  - Confirm `@CrewBase` class exists in `src/crewai_template/crew.py` (it does: `ConfigDrivenCrew`).
+  - Confirm `@CrewBase` class exists in `src/crew_composer/crew.py` (it does: `ConfigDrivenCrew`).
 - __ValidationError: Task missing fields__
   - Ensure every task has `description` and `expected_output`; update `task_order` and `context` if you renamed tasks.
 - __Knowledge source errors__

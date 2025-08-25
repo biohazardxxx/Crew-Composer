@@ -83,3 +83,5 @@ chromadb*
 config/*.local.yaml
 .notes.md
 db/*
+
+hello_world_*

@@ -301,7 +301,7 @@ tools:
 
     # Install dependency llama-index.
     - name: llamaindex_tool
-      module: crewai_template.tools.llamaindex_query_tool
+      module: crew_composer.tools.llamaindex_query_tool
       class: LlamaIndexQueryTool
       enabled: false
       args: {}

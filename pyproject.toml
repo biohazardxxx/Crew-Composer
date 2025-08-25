@@ -3,9 +3,9 @@ requires = ["setuptools>=68.0.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "crewai-template"
-version = "0.1.0"
-description = "Modular, config-driven CrewAI template with CLI and tool registry"
+name = "crew-composer"
+version = "0.2.0"
+description = "Config-driven CrewAI composer with CLI, tool registry, and MCP integration"
 authors = [{ name = "CrewAI Template" }]
 readme = "README.md"
 requires-python = ">=3.10"
@@ -21,7 +21,10 @@ dependencies = [
 ]
 
 [project.scripts]
-crewai-template = "crewai_template.cli:app"
+crew-composer = "crew_composer.cli:app"
+crew-comp = "crew_composer.cli:app"
+# Temporary alias for backward compatibility; will be removed in a future release
+crewai-template = "crew_composer.cli:app"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

@@ -1,6 +1,6 @@
-# Documentation - CrewAI Modular Config Template
+# Documentation - Crew Composer
 
-Welcome to the documentation for the CrewAI Modular Config Template. This template is fully configuration-driven and designed to be extended via YAML, dynamic tool loading, and optional MCP integration.
+Welcome to the documentation for Crew Composer. It is fully configuration-driven and designed to be extended via YAML, dynamic tool loading, and optional MCP integration.
 
 Use the pages below to get started and tailor the template to your needs.
 

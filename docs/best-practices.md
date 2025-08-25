@@ -39,7 +39,7 @@ reporting_task:
 
 - Attach tools at the agent level via `tool_names`.
 - Keep tool sets minimal and purposeful; avoid loading everything by default.
-- Use `crewai-template list-tools` to verify which tool names are available (including MCP tools with prefixes).
+- Use `crew-composer list-tools` to verify which tool names are available (including MCP tools with prefixes).
 
 ## MCP integration
 
@@ -80,7 +80,6 @@ knowledge_sources:
 
 ## Debugging
 
-- `crewai-template validate` to verify YAML and imports.
-- `crewai-template show-configs` to inspect merged configs.
+- `crew-composer validate` to verify YAML and imports.
+- `crew-composer show-configs` to inspect merged configs.
 - Turn `verbose: true` on specific agents to audit reasoning for that segment.
-

@@ -55,4 +55,4 @@ Behavior:
 
 - Tools from each server are registered as `<name_prefix><tool_name>` (prefix defaults to `<name>.`).
 - `include_tools` and `exclude_tools` filter by the remote tool name.
-- All resolved tools (static + MCP) are visible via `crewai-template list-tools`.
+- All resolved tools (static + MCP) are visible via `crew-composer list-tools`.

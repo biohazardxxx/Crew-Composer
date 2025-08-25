@@ -1,6 +1,6 @@
-# CrewAI Modular Config Template
+# Crew Composer
 
-A modular, configuration-driven template for building CrewAI apps that are easy to update, extend, and integrate with tools and MCP. Ships with a Typer-based CLI and is compatible with the CrewAI CLI (`crewai run`).
+A modular, configuration-driven composer for building CrewAI apps that are easy to update, extend, and integrate with tools and MCP. Ships with a Typer-based CLI and is compatible with the CrewAI CLI (`crewai run`).
 
 ## Features
 
@@ -8,7 +8,7 @@ A modular, configuration-driven template for building CrewAI apps that are easy 
 - **Tool registry**: Dynamically import and instantiate tools from YAML; supports env var interpolation in args.
 - **MCP-ready**: Placeholders and guidance to wire MCP servers and wrappers via config.
 - **MCP dynamic tools**: Connect to MCP servers (stdio, SSE, streamable HTTP) from config and auto-register their tools.
-- **CLI**: `crewai-template` for validate/list/run/show and `crewai run` compatibility.
+- **CLI**: `crew-composer` (alias: `crew-comp`) for validate/list/run/show and `crewai run` compatibility.
 - **Validation**: Pydantic-backed validation, clear error messages.
 - **.env support**: Environment variable interpolation like `${VAR}` or `${VAR:default}`.
 
@@ -35,7 +35,7 @@ A modular, configuration-driven template for building CrewAI apps that are easy 
 │  ├─ troubleshooting.md
 │  └─ faq.md
 ├─ src/
-│  └─ crewai_template/
+│  └─ crew_composer/
 │     ├─ __init__.py
 │     ├─ cli.py
 │     ├─ crew.py
@@ -210,32 +210,32 @@ Notes:
 
 ## CLI Usage
 
-After installation (`pip install -e .`), the CLI entry point `crewai-template` is available.
+After installation (`pip install -e .`), the CLI entry point `crew-composer` is available (short alias: `crew-comp`).
 
 - **Validate configs and tool imports**
 
 ```powershell
-crewai-template validate
+crew-composer validate
 ```
 
 - **List available tools**
 
 ```powershell
-crewai-template list-tools
+crew-composer list-tools
 ```
 
 - **Show merged configs**
 
 ```powershell
-crewai-template show-configs
+crew-composer show-configs
 ```
 
 - **Run the example crew**
 
 ```powershell
-crewai-template run --inputs topic="Hello World"
+crew-composer run --inputs topic="Hello World"
 # or JSON
-crewai-template run --inputs-json '{"topic": "Hello World"}'
+crew-composer run --inputs-json '{"topic": "Hello World"}'
 ```
 
 Notes:
@@ -247,7 +247,7 @@ Notes:
 crewai run
 ```
 
-It auto-detects `@CrewBase` in `src/crewai_template/crew.py`.
+It auto-detects `@CrewBase` in `src/crew_composer/crew.py`.
 
 ## MCP Integration
 
@@ -293,7 +293,7 @@ Notes:
 - **ToolImportError**: The `module` or `class` wasn’t importable. Verify `enabled: true` only for real tools.
 - **UnsupportedToolError**: A tool name referenced by an agent/task is not defined/enabled.
 - **API key errors**: Check `.env` and environment interpolation in YAML.
-- **`crewai run` cannot find crew**: Confirm `@CrewBase` class exists in `src/crewai_template/crew.py`.
+- **`crewai run` cannot find crew**: Confirm `@CrewBase` class exists in `src/crew_composer/crew.py`.
 - **ValidationError: Task missing `description` or `expected_output`**: The task name may have been renamed without updating `task_order`/`context`, or the YAML entry is incomplete. Fix the names and ensure required fields exist.
 
 ## Notes on Extensibility

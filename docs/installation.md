@@ -63,19 +63,19 @@ python -m pip install docling
 - Validate configuration and tool imports:
 
 ```powershell
-crewai-template validate
+crew-composer validate
 ```
 
 - List resolved tools (including MCP tools if enabled):
 
 ```powershell
-crewai-template list-tools
+crew-composer list-tools
 ```
 
 - Run example crew:
 
 ```powershell
-crewai-template run --inputs topic="Hello World"
+crew-composer run --inputs topic="Hello World"
 ```
 
 - You can also run via CrewAI CLI (auto-detects the crew):
