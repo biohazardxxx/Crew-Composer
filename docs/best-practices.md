@@ -7,7 +7,7 @@ Practical guidance to keep your config-driven crew maintainable, robust, and eas
 - Use snake_case for keys and names, e.g. `web_content_research_task`.
 - Task names should be valid Python identifiers for maximal compatibility.
 - Keep task entries concise: at minimum `description` and `expected_output`.
-- Prefer explicit mapping in `config/crew.yaml`:
+- Prefer explicit mapping in `config/crews.yaml` (under your selected crew):
   - `task_order` controls which tasks run and in what order.
   - `task_agent_map` binds tasks to agents; can be a single agent or a list for collaborative cloning.
 
@@ -76,10 +76,11 @@ knowledge_sources:
 
 - Collaborative list mapping creates per-agent clones of a task, passing prior clone outputs forward. Only the final clone writes to disk.
 - Prefer pipelines of focused tasks connected via `context` to keep prompts short and grounded.
-- Use `run_async` in `crew.yaml` only when your environment and tools are safe for concurrency.
+- Use `run_async` in `crews.yaml` (under the selected crew) only when your environment and tools are safe for concurrency.
 
 ## Debugging
 
 - `crewai-template validate` to verify YAML and imports.
 - `crewai-template show-configs` to inspect merged configs.
 - Turn `verbose: true` on specific agents to audit reasoning for that segment.
+

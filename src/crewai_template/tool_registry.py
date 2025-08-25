@@ -27,11 +27,15 @@ class ToolRegistry:
     Tools are referenced by unique names in YAML and can be attached to agents or tasks.
     """
 
-    def __init__(self, root: Optional[Path] = None) -> None:
+    def __init__(self, root: Optional[Path] = None, tools_files: Optional[List[str]] = None) -> None:
         self.root = root or get_project_root()
-        crew_cfg = load_crew_config(self.root)
-        self.tools_config: ToolsConfig = load_tools_config(self.root, crew_cfg.tools_files)
-        self.mcp_servers: List[MCPServerSpec] = load_mcp_servers_config(self.root, crew_cfg.tools_files)
+        if tools_files is None:
+            # Fallback to the first crew defined in config/crews.yaml
+            crew_cfg = load_crew_config(self.root, None)
+            tools_files = crew_cfg.tools_files
+        self._tools_files: List[str] = list(tools_files)
+        self.tools_config: ToolsConfig = load_tools_config(self.root, self._tools_files)
+        self.mcp_servers: List[MCPServerSpec] = load_mcp_servers_config(self.root, self._tools_files)
         self._instances: Dict[str, Any] = {}
         self._mcp_adapters: List[Any] = []
         self._build()
@@ -116,12 +120,19 @@ class ToolRegistry:
         return resolved
 
 
-# Convenience, lazy singleton
-_registry: Optional[ToolRegistry] = None
+# Crew-aware registry cache keyed by (root, tools_files)
+_registry_cache: Dict[tuple[str, tuple[str, ...]], ToolRegistry] = {}
 
 
-def registry(root: Optional[Path] = None) -> ToolRegistry:
-    global _registry
-    if _registry is None or (root and root != _registry.root):
-        _registry = ToolRegistry(root)
-    return _registry
+def registry(root: Optional[Path] = None, tools_files: Optional[List[str]] = None) -> ToolRegistry:
+    r = (root or get_project_root()).resolve()
+    if tools_files is None:
+        # Resolve default tools_files via first crew
+        crew_cfg = load_crew_config(r, None)
+        tools_files = crew_cfg.tools_files
+    # Use absolute normalized paths for cache key stability
+    tf_tuple = tuple(str((r / Path(p)).resolve()) for p in tools_files)
+    key = (str(r), tf_tuple)
+    if key not in _registry_cache:
+        _registry_cache[key] = ToolRegistry(r, list(tools_files))
+    return _registry_cache[key]

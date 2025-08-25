@@ -16,6 +16,7 @@ from .config_loader import (
     load_agents_config,
     load_tasks_config,
     load_crew_config,
+    list_crew_names,
     load_mcp_servers_config,
     validate_all,
 )
@@ -38,13 +39,14 @@ def _kv_to_dict(items: Optional[list[str]]) -> Dict[str, Any]:
     return data
 
 
-def _ensure_mcp_if_needed(root: Path) -> None:
+def _ensure_mcp_if_needed(root: Path, crew_name: Optional[str]) -> None:
     """If any MCP server uses stdio transport, ensure 'mcp' package is installed.
 
     This avoids downstream auto-install prompts that may use an invalid requirement string.
     """
     try:
-        servers = load_mcp_servers_config(root)
+        crew_cfg = load_crew_config(root, crew_name)
+        servers = load_mcp_servers_config(root, crew_cfg.tools_files)
     except Exception:
         return
     needs_mcp = False
@@ -72,29 +74,38 @@ def _ensure_mcp_if_needed(root: Path) -> None:
 
 
 @app.command()
-def validate(config_dir: str = typer.Option("config", help="Directory with YAML files.")):
+def validate(
+    crew: Optional[str] = typer.Option(None, help="Crew name from config/crews.yaml (defaults to first)."),
+    config_dir: str = typer.Option("config", help="Directory with YAML files."),
+):
     """Validate all configuration files and tool imports."""
     load_dotenv(override=False)
     root = get_project_root()
-    validate_all(root)
-    _ensure_mcp_if_needed(root)
-    _ = registry(root)  # build tools
+    validate_all(root, crew)
+    _ensure_mcp_if_needed(root, crew)
+    crew_cfg = load_crew_config(root, crew)
+    _ = registry(root, crew_cfg.tools_files)  # build tools
     console.print("[green]Tools loaded successfully.[/green]")
 
 
 @app.command()
-def list_tools():
+def list_tools(
+    crew: Optional[str] = typer.Option(None, help="Crew name from config/crews.yaml (defaults to first)."),
+):
     """List all enabled tools resolved from configuration."""
     load_dotenv(override=False)
     root = get_project_root()
-    _ensure_mcp_if_needed(root)
-    reg = registry(root)
+    _ensure_mcp_if_needed(root, crew)
+    crew_cfg = load_crew_config(root, crew)
+    reg = registry(root, crew_cfg.tools_files)
     for name in reg.all_names:
         console.print(f"- {name}")
 
 
 @app.command()
-def show_configs():
+def show_configs(
+    crew: Optional[str] = typer.Option(None, help="Crew name from config/crews.yaml (defaults to first)."),
+):
     """Print merged configs useful for debugging."""
     root = get_project_root()
     console.rule("Agents")
@@ -102,11 +113,19 @@ def show_configs():
     console.rule("Tasks")
     console.print(load_tasks_config(root))
     console.rule("Crew")
-    console.print(load_crew_config(root).model_dump())
+    console.print(load_crew_config(root, crew).model_dump())
+    try:
+        names = list_crew_names(root)
+        console.rule("Available Crews")
+        for n in names:
+            console.print(f"- {n}{' (default)' if (crew is None and n == names[0]) else ''}{' (selected)' if (crew and n == crew) else ''}")
+    except Exception:
+        pass
 
 
 @app.command()
 def run(
+    crew: Optional[str] = typer.Option(None, help="Crew name from config/crews.yaml (defaults to first)."),
     inputs_json: Optional[str] = typer.Option(None, help="JSON string with kickoff inputs."),
     inputs: Optional[list[str]] = typer.Option(
         None,
@@ -119,8 +138,9 @@ def run(
     """
     load_dotenv(override=False)
     root = get_project_root()
-    _ensure_mcp_if_needed(root)
-    _ = registry(root)  # ensure tools are instantiated early for clearer errors
+    _ensure_mcp_if_needed(root, crew)
+    crew_cfg = load_crew_config(root, crew)
+    _ = registry(root, crew_cfg.tools_files)  # ensure tools are instantiated early for clearer errors
 
     data: Dict[str, Any] = {}
     if inputs_json:
@@ -142,8 +162,8 @@ def run(
         console.print(f"[yellow]Warning: unable to pre-create output directories: {e}[/yellow]")
 
     try:
-        crew_cfg = load_crew_config(root)
-        crew_instance = ConfigDrivenCrew()
+        crew_cfg = load_crew_config(root, crew)
+        crew_instance = ConfigDrivenCrew(crew_name=crew)
         if getattr(crew_cfg, "run_async", False):
             async def _run():
                 result = await crew_instance.kickoff_async(inputs=data or {"topic": "Hello World"})

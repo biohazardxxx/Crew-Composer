@@ -1,6 +1,6 @@
 # Multi-Agent Task Mapping
 
-Map tasks to one agent or a list of agents in `config/crew.yaml -> task_agent_map`.
+Map tasks to one agent or a list of agents in `config/crews.yaml -> <crew> -> task_agent_map`.
 
 ## Single agent per task (default)
 
@@ -39,7 +39,7 @@ reporting_task:
 - For list-mapped tasks, clones run in sequence across the listed agents.
 - The previous clone is appended to context for the next clone automatically.
 - Only the final clone retains `output_file` to avoid duplicate writes.
-- If a task is unmapped, it defaults to the first agent in `crew.yaml -> agents`.
+- If a task is unmapped, it defaults to the first agent in `config/crews.yaml -> <crew> -> agents`.
 
 ## Tips
 

@@ -17,7 +17,7 @@ Use the pages below to get started and tailor the template to your needs.
 
 Quick facts:
 
-- Fully config-driven tasks and orchestration using `config/tasks.yaml` and `config/crew.yaml`.
+- Fully config-driven tasks and orchestration using `config/tasks.yaml` and `config/crews.yaml`.
 - Agents are specified at the crew level; map tasks to agents with `task_agent_map`.
 - No hardcoded `@task`, `@agent` or `@tool` functions needed! Task, agent and tool wrappers are synthesized dynamically from YAML task names for context resolution.
 - Windows-first setup instructions with `venv` are provided.

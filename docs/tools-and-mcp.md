@@ -18,7 +18,7 @@ Each tool entry defines the import location and constructor args:
 
 - Only `enabled: true` tools are instantiated.
 - `env` values are exported via `os.environ.setdefault` before constructing the tool.
-- Use `crew.yaml -> tools_files` to merge multiple tool catalogs.
+- Use `config/crews.yaml -> <crew> -> tools_files` to merge multiple tool catalogs.
 
 Attach tools to agents via `config/agents.yaml` under `tool_names` (alias: `tools`):
 

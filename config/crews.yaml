@@ -1,0 +1,47 @@
+# Multi-crew configuration (root mapping)
+crews:
+  default:
+    # Crew-wide settings and defaults
+    process: sequential  # options: sequential, hierarchical
+    verbose: false
+    planning: false
+    memory: false
+    planning_llm: gpt-4o-mini
+
+    # Optional: specify a manager agent by name (must match an agent key in agents.yaml)
+    # Manager LLM used to manage the crew (applies when hierarchical or when used explicitly)
+    # manager_agent: summary_analyst
+    # IMPORTANT: Either manager_agent or manager_llm must be set when using the hierarchical process.
+    manager_llm: gpt-4o-mini
+
+    # Knowledge sources configuration
+    # List of knowledge sources to use from agents.knowledge.yaml
+    # Semantics:
+    # - omit key or set to ["ALL"] => use all available
+    # - [] => use none
+    # - [names...] => only those listed
+    knowledge_sources: []  # e.g. ["ALL"] or ["user_profile", "company_policies"]
+
+    # When true, CLI runs kickoff asynchronously
+    run_async: false
+
+    # Tool configuration files (merged in order)
+    tools_files:
+      - config/tools.yaml
+      - config/mcp_tools.yaml
+
+    # Crew-level orchestration (config-driven)
+    # Only these agents will be instantiated for this crew
+    agents:
+      - researcher
+      - report_writer
+
+    # Explicit task execution order for this crew
+    task_order:
+      - web_content_research_task
+      - reporting_task
+
+    # Explicitly map tasks to agents
+    task_agent_map:
+      web_content_research_task: researcher
+      reporting_task: [researcher, report_writer]

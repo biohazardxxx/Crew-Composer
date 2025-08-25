@@ -1,0 +1,5 @@
+1. A 'Hello, World!' program is a basic computer program that displays 'Hello, World!' and is often the first written in a new programming language.
+2. It is used to illustrate a language's syntax and as a test to verify that the software setup is correct.
+3. The tradition of using 'Hello, World!' originates from the 1978 book 'The C Programming Language' by Brian Kernighan.
+4. The program works by using a function to print a formatted output, making it a simple example of program structure.
+5. It has become a standard way to demonstrate basic functionality and has been adopted widely across many programming languages.

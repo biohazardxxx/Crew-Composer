@@ -259,7 +259,58 @@ tools:
         COUCHBASE_PASSWORD: ${COUCHBASE_PASSWORD}
         COUCHBASE_BUCKET: ${COUCHBASE_BUCKET}
 
-  ai_machine_learning: []  # LLMs are configured on agents via the 'llm' field. This section is intentionally empty.
+  ai_machine_learning:
+    - name: dalle_generate
+      module: crewai_tools
+      class: DallETool
+      enabled: false
+      args: {}
+      env:
+        OPENAI_API_KEY: ${OPENAI_API_KEY}
+
+    - name: vision_extract_text
+      module: crewai_tools
+      class: VisionTool
+      enabled: false
+      args: {}
+      env:
+        OPENAI_API_KEY: ${OPENAI_API_KEY}
+    
+    # Install dependency minds-sdk.
+    - name: aimind_query
+      module: crewai_tools
+      class: AIMindTool
+      enabled: false
+      args: {}
+      env:
+        MINDS_API_KEY: ${MINDS_API_KEY}
+
+    - name: rag_knowledge_base
+      module: crewai_tools
+      class: RagTool
+      enabled: false
+      args: {}
+
+    # Default is safe (Docker if available, else sandbox).
+    # You can set args.unsafe_mode: true only if you accept the HIGH risk.
+    - name: code_interpreter
+      module: crewai_tools
+      class: CodeInterpreterTool
+      enabled: false
+      args: {}
+
+    # Install dependency llama-index.
+    - name: llamaindex_tool
+      module: crewai_template.tools.llamaindex_query_tool
+      class: LlamaIndexQueryTool
+      enabled: false
+      args: {}
+      # Optional usage examples (uncomment and adjust):
+      # args:
+      #   data_dir: "knowledge/"  # builds a simple index from files in this dir
+      #   # OR use a factory to return a prebuilt query engine
+      #   # factory_path: "your_package.builders:build_query_engine"
+      #   # factory_kwargs: { index_name: "my_index" }
 
   cloud_storage_solutions:
     - name: s3_read

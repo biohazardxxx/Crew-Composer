@@ -1,6 +1,6 @@
 # Knowledge Sources
 
-Declare reusable knowledge sources in `config/agents.knowledge.yaml`. Selection is controlled from `config/crew.yaml -> knowledge_sources`.
+Declare reusable knowledge sources in `config/agents.knowledge.yaml`. Selection is controlled from `config/crews.yaml -> <crew> -> knowledge_sources`.
 
 ## Supported types
 
@@ -39,7 +39,7 @@ knowledge_sources:
     max_depth: 2
 ```
 
-## Crew selection (`config/crew.yaml`)
+## Crew selection (`config/crews.yaml`)
 
 ```yaml
 # Semantics:

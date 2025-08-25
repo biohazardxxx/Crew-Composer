@@ -19,7 +19,7 @@ A modular, configuration-driven template for building CrewAI apps that are easy 
 ├─ config/
 │  ├─ agents.yaml
 │  ├─ tasks.yaml
-│  ├─ crew.yaml
+│  ├─ crews.yaml
 │  ├─ tools.yaml
 │  └─ mcp_tools.yaml
 ├─ docs/
@@ -100,7 +100,7 @@ python -m pip install mcp
 
 - `config/agents.yaml`: Roles, goals, backstories, LLMs, and tools per agent.
 - `config/tasks.yaml`: Descriptions, expected outputs, context deps, and optional `output_file`.
-- `config/crew.yaml`: Process (`sequential`/`hierarchical`), verbosity, planning, memory, knowledge, and `tools_files` list.
+- `config/crews.yaml`: Root `crews:` mapping with named crews. Each crew config controls process (`sequential`/`hierarchical`), verbosity, planning, memory, knowledge, and `tools_files` list.
 - `config/tools.yaml`: CrewAi default tool categories with entries `{ name, module, class, enabled, args, env }`.
 - `config/mcp_tools.yaml`: MCP servers and tool wrappers. Disabled by default.
 
@@ -112,20 +112,20 @@ Tasks and their dependency `context` are fully configuration-driven. CrewAI reso
 
 When you rename or add tasks in `config/tasks.yaml`:
 
-- Update `config/crew.yaml -> task_order` to reflect the new names, or remove `task_order` to run in YAML order.
+- Update `config/crews.yaml -> <crew> -> task_order` to reflect the new names, or remove `task_order` to run in YAML order.
 - Update any `context` arrays in downstream tasks to reference the new task name(s).
 - Ensure each task has the required fields: `description` and `expected_output`.
 
 Notes:
 
 - Task names should be valid Python identifiers (e.g., `web_content_research_task`), which is safest across CrewAI versions.
-- Tasks are selected by `config/crew.yaml -> task_order`. To disable a task, omit it from `task_order`. If `task_order` is omitted, tasks run in YAML order.
-- Map tasks to agents via `config/crew.yaml -> task_agent_map`. If not provided, this template defaults each task to the first crew agent.
-- Agents are listed at the crew level in `config/crew.yaml -> agents` and built from `config/agents.yaml`.
+- Tasks are selected by `config/crews.yaml -> <crew> -> task_order`. To disable a task, omit it from `task_order`. If `task_order` is omitted, tasks run in YAML order.
+- Map tasks to agents via `config/crews.yaml -> <crew> -> task_agent_map`. If not provided, this template defaults each task to the first crew agent.
+- Agents are listed at the crew level in `config/crews.yaml -> <crew> -> agents` and built from `config/agents.yaml`.
 
 ### Task enablement and agent mapping
 
-- Remove per-task `enabled` flags; task selection is driven solely by `crew.yaml -> task_order`.
+- Remove per-task `enabled` flags; task selection is driven solely by `config/crews.yaml -> <crew> -> task_order`.
 - Provide `task_agent_map` to explicitly attach an agent to each task. Example:
 
 ```yaml
@@ -137,7 +137,7 @@ task_agent_map:
   reporting_task: reporting_analyst
 ```
 
-If `task_agent_map` is omitted, the template will default tasks to the first agent listed in `crew.yaml -> agents`.
+If `task_agent_map` is omitted, the template will default tasks to the first agent listed in `config/crews.yaml -> <crew> -> agents`.
 
 ### Collaborative multi-agent execution (list mapping and pipelines)
 
@@ -170,7 +170,7 @@ reporting_task:
 ```
 
 ```yaml
-# config/crew.yaml
+# config/crews.yaml (under your crew)
 agents:
   - researcher
   - report_writer
@@ -193,7 +193,7 @@ Behavior:
 Alternate single-task variant (Option A):
 
 ```yaml
-# config/crew.yaml
+# config/crews.yaml (under your crew)
 task_agent_map:
   web_content_research_task: [researcher, report_writer]
 
@@ -298,7 +298,7 @@ Notes:
 
 ## Notes on Extensibility
 
-- Add more YAML files and list them in `crew.yaml.tools_files` to merge tool catalogs.
+- Add more YAML files and list them in `config/crews.yaml -> <crew> -> tools_files` to merge tool catalogs.
 - Add categories in `tools.yaml` freely; names must be unique across all enabled tools.
 - Task-level tool overrides are currently disabled for compatibility; attach tools at the agent level.
 - You can use wildcards like `serverprefix.*` to attach all tools from a given MCP server.

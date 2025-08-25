@@ -53,4 +53,4 @@ crewai run
 Notes:
 
 - CLI pre-creates directories for any `output_file` declared in `config/tasks.yaml`.
-- `run_async: true` in `config/crew.yaml` makes the CLI run kickoff asynchronously.
+- `run_async: true` in `config/crews.yaml` (under the selected crew) makes the CLI run kickoff asynchronously.

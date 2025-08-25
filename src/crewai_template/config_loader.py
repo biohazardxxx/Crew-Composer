@@ -125,10 +125,44 @@ def load_tasks_config(root: Path) -> Dict[str, Any]:
     return _resolve_env_placeholders(data)
 
 
-def load_crew_config(root: Path) -> CrewConfig:
-    raw = _load_yaml(root / "config" / "crew.yaml")
-    raw = _resolve_env_placeholders(raw)
-    return CrewConfig.model_validate(raw)
+def load_crew_config(root: Path, crew_name: Optional[str] = None) -> CrewConfig:
+    """Load a single crew config selected from config/crews.yaml.
+
+    Selection rules:
+    - If crew_name is provided, use that key from the 'crews' mapping.
+    - Otherwise, select the first crew key encountered.
+    """
+    path = root / "config" / "crews.yaml"
+    raw_all = _load_yaml(path)
+    raw_all = _resolve_env_placeholders(raw_all)
+    # Expect shape: {'crews': {name: { ... }, ... }}
+    if not isinstance(raw_all, dict) or "crews" not in raw_all or not isinstance(raw_all["crews"], dict):
+        raise InvalidConfigError(f"Expected 'crews' mapping at root of {path}")
+    crews_map: Dict[str, Any] = raw_all["crews"]
+    if not crews_map:
+        raise InvalidConfigError(f"No crews defined in {path}")
+    selected_name: str
+    if crew_name:
+        if crew_name not in crews_map:
+            available = ", ".join(crews_map.keys())
+            raise InvalidConfigError(f"Crew '{crew_name}' not found in {path}. Available: {available}")
+        selected_name = crew_name
+    else:
+        # First key by insertion order
+        selected_name = next(iter(crews_map.keys()))
+    selected = crews_map[selected_name]
+    if not isinstance(selected, dict):
+        raise InvalidConfigError(f"Crew '{selected_name}' must be a mapping in {path}")
+    return CrewConfig.model_validate(selected)
+
+
+def list_crew_names(root: Path) -> List[str]:
+    """Return the ordered list of crew names defined in config/crews.yaml."""
+    path = root / "config" / "crews.yaml"
+    raw_all = _load_yaml(path)
+    if not isinstance(raw_all, dict) or "crews" not in raw_all or not isinstance(raw_all["crews"], dict):
+        raise InvalidConfigError(f"Expected 'crews' mapping at root of {path}")
+    return list(raw_all["crews"].keys())
 
 
 def load_tools_config(root: Path, tools_files: Optional[List[str]] = None) -> ToolsConfig:
@@ -201,12 +235,12 @@ def get_project_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
-def validate_all(root: Optional[Path] = None) -> None:
+def validate_all(root: Optional[Path] = None, crew_name: Optional[str] = None) -> None:
     root = root or get_project_root()
     # Presence checks
     _ = load_agents_config(root)
     _ = load_tasks_config(root)
-    crew_conf = load_crew_config(root)
+    crew_conf = load_crew_config(root, crew_name)
     _ = load_tools_config(root, crew_conf.tools_files)
     # Parse MCP servers (may be optional if file absent)
     _ = load_mcp_servers_config(root, crew_conf.tools_files)

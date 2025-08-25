@@ -20,7 +20,7 @@ class ConfigDrivenCrew:
     """Crew driven by YAML configs.
 
     Tasks and agents are built dynamically from YAML. No hardcoded task methods are
-    required; orchestration is controlled via `config/crew.yaml` and `config/tasks.yaml`.
+    required; orchestration is controlled via `config/crews.yaml` and `config/tasks.yaml`.
     Tools are attached based on `config/tools.yaml` and `config/mcp_tools.yaml`.
     """
 
@@ -30,12 +30,13 @@ class ConfigDrivenCrew:
     agents_config = str((_BASE_DIR / "config" / "agents.yaml").resolve())
     tasks_config = str((_BASE_DIR / "config" / "tasks.yaml").resolve())
 
-    def __init__(self) -> None:
+    def __init__(self, crew_name: Optional[str] = None) -> None:
         self.root: Path = get_project_root()
-        self._tool_registry = registry(self.root)
         self._agents = load_agents_config(self.root)
         self._tasks = load_tasks_config(self.root)
-        self._crew_cfg = load_crew_config(self.root)
+        self._crew_cfg = load_crew_config(self.root, crew_name)
+        # Build registry with the tools for the selected crew
+        self._tool_registry = registry(self.root, self._crew_cfg.tools_files)
         # Ensure dynamic @task methods exist for YAML-defined tasks (for context resolution)
         self._ensure_dynamic_task_methods()
 
@@ -89,7 +90,7 @@ class ConfigDrivenCrew:
             raise ValueError(
                 f"Task '{name}' is incomplete or not found. Ensure it exists in config/tasks.yaml "
                 f"with 'description' and 'expected_output'. If you recently renamed it, update "
-                f"crew.yaml task_order and any 'context' references in other tasks."
+                f"crews.yaml task_order for the selected crew and any 'context' references in other tasks."
             )
         # Construct the Task with optional context objects
         if use_ctor_agent and can_pass_context and context_objs:
@@ -343,7 +344,7 @@ class ConfigDrivenCrew:
         if not tasks_list:
             raise ValueError(
                 "No tasks configured. Ensure config/tasks.yaml has at least one enabled task "
-                "or set crew.task_order in config/crew.yaml."
+                "or set crew.task_order in config/crews.yaml for the selected crew."
             )
 
         # Load knowledge sources from configuration with filtering
