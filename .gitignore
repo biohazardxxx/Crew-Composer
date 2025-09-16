@@ -71,6 +71,7 @@ _site/
 
 # Local scripts/output
 output/
+backups/
 
 # Node (if present in submodules or tools)
 node_modules/
