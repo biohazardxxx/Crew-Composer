@@ -179,5 +179,34 @@ def run(
         console.print(traceback.format_exc())
 
 
+@app.command()
+def ui(
+    port: int = typer.Option(8501, help="Port for Streamlit server."),
+    headless: bool = typer.Option(True, help="Run Streamlit in headless mode."),
+):
+    """Launch the Crew Composer Streamlit UI packaged in crew_composer.ui.app."""
+    load_dotenv(override=False)
+    root = get_project_root()
+    # Build the streamlit command to run the packaged app module file
+    # We point streamlit to the module file path so it can watch for changes.
+    app_path = (Path(__file__).parent / "ui" / "app.py").resolve()
+    cmd = [
+        sys.executable,
+        "-m",
+        "streamlit",
+        "run",
+        str(app_path),
+        "--server.port",
+        str(port),
+    ]
+    if headless:
+        cmd += ["--server.headless", "true"]
+    console.print(f"[bold]Starting UI:[/bold] {' '.join(cmd)}")
+    try:
+        subprocess.check_call(cmd, cwd=str(root))
+    except subprocess.CalledProcessError as e:
+        console.print(f"[red]Failed to start Streamlit UI: {e}[/red]")
+
+
 if __name__ == "__main__":
     app()

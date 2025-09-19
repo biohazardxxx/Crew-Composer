@@ -125,11 +125,27 @@ Launch the UI to manage configs, run crews, and review outputs without editing Y
 ./venv/Scripts/Activate.ps1
 ```
 
-1. Start the app
+1. Start the app (pick one)
 
-```powershell
-python -m streamlit run app/streamlit_app.py
-```
+- Recommended: via CLI
+
+  ```powershell
+  python -m crew_composer.cli ui
+  # options:
+  # python -m crew_composer.cli ui --port 8502 --no-headless
+  ```
+
+- Packaged app directly (works well with Streamlit hot-reload)
+
+  ```powershell
+  python -m streamlit run src/crew_composer/ui/app.py
+  ```
+
+- Legacy wrapper (kept for compatibility; delegates to the packaged UI)
+
+  ```powershell
+  python -m streamlit run app/streamlit_app.py
+  ```
 
 Key capabilities:
 
@@ -256,6 +272,13 @@ Notes:
 ## CLI Usage
 
 After installation (`pip install -e .`), the CLI entry point `crew-composer` is available (short alias: `crew-comp`).
+
+- **Launch Streamlit UI**
+
+```powershell
+crew-composer ui
+# options: crew-composer ui --port 8502 --no-headless
+```
 
 - **Validate configs and tool imports**
 

@@ -11,11 +11,27 @@ The project includes a Streamlit-based UI to manage configurations, run crews, a
 .\venv\Scripts\Activate.ps1
 ```
 
-1. Run Streamlit
+1. Start the app (choose one)
 
-```powershell
-python -m streamlit run app/streamlit_app.py
-```
+- Recommended: via CLI
+
+  ```powershell
+  python -m crew_composer.cli ui
+  # options:
+  # python -m crew_composer.cli ui --port 8502 --no-headless
+  ```
+
+- Packaged app directly (supports Streamlit hot-reload)
+
+  ```powershell
+  python -m streamlit run src/crew_composer/ui/app.py
+  ```
+
+- Legacy wrapper (kept for compatibility; delegates to packaged UI)
+
+  ```powershell
+  python -m streamlit run app/streamlit_app.py
+  ```
 
 The app title is "Crew Composer Manager".
 

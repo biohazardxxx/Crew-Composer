@@ -4,6 +4,21 @@ After installing (`pip install -e .`), the entry point `crew-composer` is availa
 
 ## Commands
 
+- `crew-composer ui [--port PORT] [--no-headless]`
+  - Launch the Streamlit UI packaged in `crew_composer.ui.app` from the project root.
+  - Options:
+    - `--port PORT` (default: 8501)
+    - `--headless / --no-headless` (default: headless)
+  - Examples:
+
+```powershell
+# Start the UI on the default port in headless mode
+crew-composer ui
+
+# Start on a custom port and allow Streamlit to open a browser window
+crew-composer ui --port 8502 --no-headless
+```
+
 - `crew-composer validate [--crew NAME]`
   - Validate YAML files, load tools (including MCP), and print success or errors. If `--crew` is omitted, the first crew in `config/crews.yaml` is used.
 - `crew-composer list-tools [--crew NAME]`
