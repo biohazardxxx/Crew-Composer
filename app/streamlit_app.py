@@ -1,4 +1,5 @@
 import sys
+import os
 from pathlib import Path
 from datetime import datetime
 from typing import Dict, List, Tuple
@@ -6,6 +7,10 @@ from typing import Dict, List, Tuple
 import streamlit as st
 import yaml
 from dotenv import dotenv_values
+import subprocess
+import json
+import re
+import html
 
 # Ensure we can import from the local src/ package path when running with Streamlit
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -26,6 +31,10 @@ KNOWLEDGE_DIR = PROJECT_ROOT / "knowledge"
 ENV_FILE = PROJECT_ROOT / ".env"
 BACKUP_DIR = PROJECT_ROOT / "backups"
 BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+RUN_LOGS_DIR = PROJECT_ROOT / "output" / "run-logs"
+RUN_LOGS_DIR.mkdir(parents=True, exist_ok=True)
+OUTPUT_DIR = PROJECT_ROOT / "output"
+DOCS_DIR = PROJECT_ROOT / "docs"
 
 
 # ---------- Utilities ----------
@@ -76,6 +85,771 @@ def yaml_is_valid(content: str) -> Tuple[bool, str]:
         return False, f"Invalid YAML: {e}"
 
 
+ANSI_PATTERN = re.compile(r"\x1B\[[0-9;]*[mK]")
+
+
+def strip_ansi(s: str) -> str:
+    try:
+        return ANSI_PATTERN.sub("", s)
+    except Exception:
+        return s
+
+
+def mcp_stdio_required_warning(root: Path) -> str:
+    """Return a warning string if any configured MCP server uses stdio transport."""
+    try:
+        if cfg is None:
+            return ""
+        crew_cfg = cfg.load_crew_config(root)
+        servers = cfg.load_mcp_servers_config(root, crew_cfg.tools_files)
+        for spec in servers:
+            transport = (getattr(spec, "transport", "") or "").lower()
+            if transport == "stdio" or (not transport and getattr(spec, "command", None)):
+                return (
+                    "Detected MCP server(s) using stdio. Ensure the 'mcp' package is installed in your venv "
+                    "before running crews or disable those servers in config/mcp_tools.yaml."
+                )
+        return ""
+    except Exception:
+        return ""
+
+
+def render_scrollable_logs(placeholder: st.delta_generator.DeltaGenerator, text: str, height: int = 420) -> None:
+    """Render text with a fixed height and scrollbars using HTML in a placeholder."""
+    try:
+        safe = html.escape(text or "")
+        placeholder.markdown(
+            (
+                f"<div style='max-height:{height}px; overflow:auto; padding:8px; "
+                "background:#0e1117; color:#eaeaea; border:1px solid #30363d; border-radius:6px; "
+                "font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace; "
+                "font-size: 12px; white-space: pre;'>"
+            ) + safe + "</div>",
+            unsafe_allow_html=True,
+        )
+    except Exception:
+        placeholder.code(text or "", language="bash")
+
+
+def crews_yaml_builder_ui(selected_path: Path) -> None:
+    """Form-based builder for config/crews.yaml (beta)."""
+    # Load current YAML
+    try:
+        existing = yaml.safe_load(read_text(selected_path) or "") or {}
+    except Exception as e:
+        st.error(f"Failed to parse existing YAML: {e}")
+        existing = {}
+
+    crews_map = {}
+    if isinstance(existing, dict):
+        crews_map = dict(existing.get("crews", {}) or {})
+
+    # Load agent and task names for choices
+    try:
+        agents_cfg = cfg.load_agents_config(PROJECT_ROOT) if cfg else {}
+        agent_names = list(agents_cfg.keys()) if isinstance(agents_cfg, dict) else []
+    except Exception:
+        agent_names = []
+    try:
+        tasks_cfg = cfg.load_tasks_config(PROJECT_ROOT) if cfg else {}
+        task_names = list(tasks_cfg.keys()) if isinstance(tasks_cfg, dict) else []
+    except Exception:
+        task_names = []
+
+    # Crew selection and creation
+    existing_crew_names = list(crews_map.keys())
+    choice = st.selectbox("Select crew to edit", ["<create new>"] + existing_crew_names, key="builder_crew_select")
+    if choice == "<create new>":
+        new_name = st.text_input("New crew name", key="builder_new_crew_name")
+        if not new_name:
+            st.info("Enter a new crew name to begin.")
+            return
+        crew_name = new_name
+        current = {}
+    else:
+        crew_name = choice
+        current = crews_map.get(crew_name, {}) if isinstance(crews_map, dict) else {}
+
+    st.markdown("### Crew settings")
+    col_a, col_b, col_c = st.columns(3)
+    with col_a:
+        process = st.selectbox("process", ["sequential", "hierarchical"], index=0 if str(current.get("process", "sequential")).lower() == "sequential" else 1)
+        verbose = st.checkbox("verbose", value=bool(current.get("verbose", True)), key=f"crews_verbose_{crew_name}")
+        memory = st.checkbox("memory", value=bool(current.get("memory", False)), key=f"crews_memory_{crew_name}")
+        run_async = st.checkbox("run_async", value=bool(current.get("run_async", False)), key=f"crews_run_async_{crew_name}")
+    with col_b:
+        planning = st.checkbox("planning", value=bool(current.get("planning", False)), key=f"crews_planning_{crew_name}")
+        planning_llm = st.text_input("planning_llm", value=str(current.get("planning_llm", "")))
+        manager_llm = st.text_input("manager_llm", value=str(current.get("manager_llm", "gpt-4o-mini")))
+        manager_agent = st.text_input("manager_agent (name)", value=str(current.get("manager_agent", "")))
+    with col_c:
+        # knowledge is free-form mapping; allow YAML snippet
+        st.caption("knowledge (YAML mapping)")
+        knowledge_yaml = st.text_area("knowledge", value=yaml.safe_dump(current.get("knowledge", {}) or {}, sort_keys=False), height=120, key="builder_knowledge")
+        # knowledge_sources comma-separated
+        ks_list = current.get("knowledge_sources", None)
+        ks_csv_default = ", ".join(ks_list) if isinstance(ks_list, list) else ""
+        knowledge_sources_csv = st.text_input("knowledge_sources (comma-separated)", value=ks_csv_default)
+
+    st.markdown("### Agents and tasks")
+    selected_agents = st.multiselect("crew.agents (allowlist; empty = build all enabled agents)", options=agent_names, default=list(current.get("agents", []) or []))
+    ordered_tasks = st.multiselect("crew.task_order (order matters)", options=task_names, default=list(current.get("task_order", []) or task_names))
+
+    with st.expander("Task to agent mapping", expanded=False):
+        task_agent_map: Dict[str, List[str]] = {}
+        existing_map = current.get("task_agent_map", {}) if isinstance(current, dict) else {}
+        for t in ordered_tasks:
+            default_for_t = existing_map.get(t, [])
+            if isinstance(default_for_t, str):
+                default_for_t = [default_for_t]
+            sel = st.multiselect(f"Agents for task '{t}'", options=agent_names, default=list(default_for_t or []), key=f"map_{t}")
+            if sel:
+                task_agent_map[t] = sel
+
+    st.markdown("### Tool files")
+    default_tools_files = current.get("tools_files", ["config/tools.yaml", "config/mcp_tools.yaml"]) or []
+    tools_files = st.multiselect("tools_files", options=["config/tools.yaml", "config/mcp_tools.yaml"], default=default_tools_files)
+
+    # Build structured data
+    try:
+        knowledge_obj = yaml.safe_load(knowledge_yaml or "") or {}
+        if not isinstance(knowledge_obj, dict):
+            st.error("knowledge must be a YAML mapping (dict)")
+            return
+    except Exception as e:
+        st.error(f"Invalid knowledge YAML: {e}")
+        return
+
+    ks_clean = [s.strip() for s in (knowledge_sources_csv or "").split(",") if s.strip()]
+    crew_obj: Dict[str, object] = {
+        "process": process,
+        "verbose": verbose,
+        "planning": planning,
+        "planning_llm": planning_llm or None,
+        "manager_llm": manager_llm or None,
+        "memory": memory,
+        "knowledge": knowledge_obj,
+        "knowledge_sources": ks_clean if ks_clean else None,
+        "run_async": run_async,
+        "manager_agent": manager_agent or None,
+        "agents": selected_agents,
+        "task_order": ordered_tasks,
+        "task_agent_map": task_agent_map,
+        "tools_files": tools_files or ["config/tools.yaml", "config/mcp_tools.yaml"],
+    }
+    # remove None values for cleanliness
+    crew_obj = {k: v for k, v in crew_obj.items() if v is not None}
+    # Merge with existing crews instead of overwriting all
+    updated_map = dict(crews_map)
+    updated_map[crew_name] = crew_obj
+    out_payload = {"crews": updated_map}
+
+    st.markdown("### Preview")
+    preview = yaml.safe_dump(out_payload, sort_keys=False, allow_unicode=True)
+    st.code(preview, language="yaml")
+
+    if st.button("Save crews.yaml (with backup)", type="primary", key="builder_save_crews"):
+        ok, info = safe_write_text(selected_path, preview)
+        (st.success if ok else st.error)(info)
+
+
+def mcp_tools_yaml_builder_ui(selected_path: Path) -> None:
+    """Form-based builder for config/mcp_tools.yaml (beta)."""
+    # Quick presets
+    with st.expander("Quick add preset server", expanded=False):
+        preset_choice = st.selectbox(
+            "Preset",
+            [
+                "<select>",
+                "Generic (SSE)",
+                "STDIO (Python)",
+                "SSE (HTTP)",
+                "Streamable HTTP",
+            ],
+            key="mcp_preset_choice",
+        )
+        preset_name = st.text_input("Server name for preset", value="example_server", key="mcp_preset_name")
+        if st.button("Add preset server", key="mcp_add_preset_btn", disabled=(preset_choice == "<select>" or not preset_name)):
+            try:
+                existing_all = yaml.safe_load(read_text(selected_path) or "") or {}
+                if not isinstance(existing_all, dict):
+                    existing_all = {}
+                servers_list = list(existing_all.get("servers", []) or [])
+
+                def preset_spec(preset: str) -> Dict[str, object]:
+                    if preset == "STDIO (Python)":
+                        return {"name": preset_name, "enabled": True, "transport": "stdio", "command": "python", "args": ["servers/your_server.py"], "env": {"UV_PYTHON": "3.12"}}
+                    if preset in ("SSE (HTTP)", "Generic (SSE)"):
+                        return {"name": preset_name, "enabled": True, "transport": "sse", "url": "http://localhost:8000/sse", "headers": {}}
+                    if preset == "Streamable HTTP":
+                        return {"name": preset_name, "enabled": True, "transport": "streamable-http", "url": "http://localhost:8001/mcp", "headers": {}}
+                    return {"name": preset_name, "enabled": True, "transport": "sse", "url": "http://localhost:8000/sse", "headers": {}}
+
+                spec = preset_spec(preset_choice)
+                # replace if name exists
+                replaced = False
+                for i, s in enumerate(servers_list):
+                    if isinstance(s, dict) and str(s.get("name", "")) == preset_name:
+                        servers_list[i] = spec
+                        replaced = True
+                        break
+                if not replaced:
+                    servers_list.append(spec)
+                payload = dict(existing_all)
+                payload["servers"] = servers_list
+                ok, info = safe_write_text(selected_path, yaml.safe_dump(payload, sort_keys=False, allow_unicode=True))
+                (st.success if ok else st.error)(info)
+            except Exception as e:
+                st.error(f"Failed to add preset: {e}")
+    try:
+        existing = yaml.safe_load(read_text(selected_path) or "") or {}
+    except Exception as e:
+        st.error(f"Failed to parse existing YAML: {e}")
+        existing = {}
+    if not isinstance(existing, dict):
+        existing = {}
+
+    servers = list(existing.get("servers", []) or [])
+    server_names = []
+    for s in servers:
+        if isinstance(s, dict):
+            nm = str(s.get("name", "")).strip()
+            if nm:
+                server_names.append(nm)
+
+    # Select or create server
+    choice = st.selectbox("Select server", ["<create new>"] + server_names, key="mcp_builder_select")
+    if choice == "<create new>":
+        server_name = st.text_input("New server name", key="mcp_builder_new_name")
+        if not server_name:
+            st.info("Enter a server name to begin.")
+            return
+        current = {}
+    else:
+        server_name = choice
+        current = {}
+        for s in servers:
+            if isinstance(s, dict) and str(s.get("name", "")) == server_name:
+                current = dict(s)
+                break
+
+    st.markdown("### Server configuration")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        enabled = st.checkbox("enabled", value=bool(current.get("enabled", True)), key=f"mcp_enabled_{server_name}")
+        transport = st.selectbox(
+            "transport",
+            ["stdio", "sse", "streamable-http"],
+            index={"stdio": 0, "sse": 1, "streamable-http": 2}.get(str(current.get("transport", "stdio")).lower(), 0),
+        )
+        name_prefix = st.text_input("name_prefix (optional)", value=str(current.get("name_prefix", "")))
+    with col2:
+        include_tools_text = st.text_area(
+            "include_tools (one per line)",
+            value="\n".join(current.get("include_tools", []) or []),
+            height=120,
+            key=f"mcp_include_{server_name}",
+        )
+        exclude_tools_text = st.text_area(
+            "exclude_tools (one per line)",
+            value="\n".join(current.get("exclude_tools", []) or []),
+            height=120,
+            key=f"mcp_exclude_{server_name}",
+        )
+    with col3:
+        connect_timeout_str = st.text_input(
+            "connect_timeout (seconds, optional)", value=str(current.get("connect_timeout", ""))
+        )
+
+    stdio_block = transport == "stdio"
+    net_block = transport in ("sse", "streamable-http")
+
+    if stdio_block:
+        st.markdown("### stdio settings")
+        cmd = st.text_input("command", value=str(current.get("command", "python")))
+        args_list_text = st.text_area(
+            "args (one per line)",
+            value="\n".join(current.get("args", []) or []),
+            height=100,
+            key=f"mcp_args_{server_name}",
+        )
+        env_yaml = st.text_area(
+            "env (YAML mapping)",
+            value=yaml.safe_dump(current.get("env", {}) or {}, sort_keys=False),
+            height=120,
+            key=f"mcp_env_{server_name}",
+        )
+        try:
+            env_obj = yaml.safe_load(env_yaml or "") or {}
+            if not isinstance(env_obj, dict):
+                st.error("env must be a YAML mapping (dict)")
+                return
+        except Exception as e:
+            st.error(f"Invalid env YAML: {e}")
+            return
+    else:
+        env_obj = None
+        args_list_text = ""
+        cmd = ""
+
+    if net_block:
+        st.markdown("### network settings")
+        url = st.text_input("url", value=str(current.get("url", "")))
+        headers_yaml = st.text_area(
+            "headers (YAML mapping)",
+            value=yaml.safe_dump(current.get("headers", {}) or {}, sort_keys=False),
+            height=120,
+            key=f"mcp_headers_{server_name}",
+        )
+        try:
+            headers_obj = yaml.safe_load(headers_yaml or "") or {}
+            if not isinstance(headers_obj, dict):
+                st.error("headers must be a YAML mapping (dict)")
+                return
+        except Exception as e:
+            st.error(f"Invalid headers YAML: {e}")
+            return
+    else:
+        headers_obj = None
+        url = ""
+
+    # Build server spec
+    def _parse_int_optional(s: str):
+        s = (s or "").strip()
+        if not s:
+            return None
+        try:
+            return int(s)
+        except Exception:
+            return None
+
+    spec: Dict[str, object] = {
+        "name": server_name,
+        "enabled": enabled,
+        "transport": transport,
+    }
+    if name_prefix.strip():
+        spec["name_prefix"] = name_prefix.strip()
+    inc = [ln.strip() for ln in (include_tools_text or "").splitlines() if ln.strip()]
+    exc = [ln.strip() for ln in (exclude_tools_text or "").splitlines() if ln.strip()]
+    if inc:
+        spec["include_tools"] = inc
+    if exc:
+        spec["exclude_tools"] = exc
+    ct = _parse_int_optional(connect_timeout_str)
+    if ct is not None:
+        spec["connect_timeout"] = ct
+
+    if stdio_block:
+        spec["command"] = cmd
+        args_list = [ln.strip() for ln in (args_list_text or "").splitlines() if ln.strip()]
+        if args_list:
+            spec["args"] = args_list
+        if env_obj:
+            spec["env"] = env_obj
+
+    if net_block:
+        if url.strip():
+            spec["url"] = url.strip()
+        if headers_obj:
+            spec["headers"] = headers_obj
+
+    # Merge spec back by name
+    new_servers = list(servers)
+    replaced = False
+    for i, s in enumerate(new_servers):
+        if isinstance(s, dict) and str(s.get("name", "")) == server_name:
+            new_servers[i] = spec
+            replaced = True
+            break
+    if not replaced:
+        new_servers.append(spec)
+
+    # mcp_wrappers (optional)
+    with st.expander("MCP wrappers (optional)", expanded=False):
+        wrappers_existing = []
+        try:
+            wrappers_existing = list(existing.get("tools", {}).get("mcp_wrappers", []) or [])
+        except Exception:
+            wrappers_existing = []
+        wrappers_text = st.text_area(
+            "mcp_wrappers (one per line)",
+            value="\n".join([str(x) for x in wrappers_existing]),
+            height=100,
+            key="mcp_wrappers_text",
+        )
+        wrappers_list = [ln.strip() for ln in (wrappers_text or "").splitlines() if ln.strip()]
+
+    out_payload: Dict[str, object] = {"servers": new_servers}
+    # preserve other top-level keys and include tools.mcp_wrappers
+    tools_block = dict(existing.get("tools", {}) or {})
+    tools_block["mcp_wrappers"] = wrappers_list
+    out_payload["tools"] = tools_block
+
+    st.markdown("### Preview")
+    preview = yaml.safe_dump(out_payload, sort_keys=False, allow_unicode=True)
+    st.code(preview, language="yaml")
+
+    if st.button("Save mcp_tools.yaml (with backup)", type="primary", key="mcp_builder_save"):
+        ok, info = safe_write_text(selected_path, preview)
+        (st.success if ok else st.error)(info)
+
+def tasks_yaml_builder_ui(selected_path: Path) -> None:
+    """Form-based builder for config/tasks.yaml (beta)."""
+    try:
+        existing = yaml.safe_load(read_text(selected_path) or "") or {}
+    except Exception as e:
+        st.error(f"Failed to parse existing YAML: {e}")
+        existing = {}
+    if not isinstance(existing, dict):
+        existing = {}
+
+    task_names = list(existing.keys())
+    choice = st.selectbox("Select task to edit", ["<create new>"] + task_names, key="tasks_builder_select")
+    if choice == "<create new>":
+        task_name = st.text_input("New task name", key="tasks_builder_new_name")
+        if not task_name:
+            st.info("Enter a new task name to begin.")
+            return
+        current = {}
+    else:
+        task_name = choice
+        current = dict(existing.get(task_name, {}) or {})
+
+    st.markdown("### Task configuration")
+    col1, col2 = st.columns(2)
+    with col1:
+        description = st.text_area("description", value=str(current.get("description", "")), height=140)
+        expected_output = st.text_area("expected_output", value=str(current.get("expected_output", "")), height=140)
+        output_file = st.text_input("output_file (optional)", value=str(current.get("output_file", "")))
+    with col2:
+        enabled = st.checkbox("enabled", value=bool(current.get("enabled", True)), key=f"tasks_enabled_{task_name}")
+        # Context selection
+        available_tasks = [t for t in task_names if t != task_name]
+        default_ctx = list(current.get("context", []) or [])
+        context = st.multiselect("context (task dependencies)", options=available_tasks, default=default_ctx)
+
+    task_obj: Dict[str, object] = {
+        "description": description,
+        "expected_output": expected_output,
+        "enabled": enabled,
+    }
+    if output_file.strip():
+        task_obj["output_file"] = output_file.strip()
+    if context:
+        task_obj["context"] = context
+
+    updated_tasks = dict(existing)
+    updated_tasks[task_name] = task_obj
+    preview = yaml.safe_dump(updated_tasks, sort_keys=False, allow_unicode=True)
+
+    st.markdown("### Preview")
+    st.code(preview, language="yaml")
+
+    if st.button("Save tasks.yaml (with backup)", type="primary", key="tasks_builder_save"):
+        ok, info = safe_write_text(selected_path, preview)
+        (st.success if ok else st.error)(info)
+
+def tools_yaml_builder_ui(selected_path: Path) -> None:
+    """Form-based builder for config/tools.yaml (beta)."""
+    # Quick presets
+    with st.expander("Quick add tool preset", expanded=False):
+        try:
+            existing_all = yaml.safe_load(read_text(selected_path) or "") or {}
+        except Exception:
+            existing_all = {}
+        tools_map_all = dict(existing_all.get("tools", {}) or {})
+        categories_all = list(tools_map_all.keys())
+        preset_category_mode = st.radio("Category", ["Existing", "New"], horizontal=True, key="tools_preset_cat_mode")
+        if preset_category_mode == "Existing" and categories_all:
+            preset_category = st.selectbox("Select category", categories_all, key="tools_preset_category")
+        else:
+            preset_category = st.text_input("New category name", value="file_document_management", key="tools_preset_new_category")
+
+        preset_tool_choice = st.selectbox(
+            "Tool preset",
+            [
+                "<select>",
+                "file_read",
+                "file_write",
+                "dir_read",
+                "dir_search",
+                "web_rag",
+                "scrape_website",
+                "scrape_element",
+            ],
+            key="tools_preset_choice",
+        )
+        preset_tool_name = st.text_input("Tool name", value="file_read", key="tools_preset_name")
+        if st.button("Add preset tool", key="tools_add_preset_btn", disabled=(preset_tool_choice == "<select>" or not preset_category or not preset_tool_name)):
+            try:
+                def tool_spec(name: str) -> Dict[str, object]:
+                    base = {"name": preset_tool_name, "module": "crewai_tools", "enabled": True, "args": {}}
+                    mapping = {
+                        "file_read": {**base, "class": "FileReadTool"},
+                        "file_write": {**base, "class": "FileWriterTool", "args": {"directory": "output"}},
+                        "dir_read": {**base, "class": "DirectoryReadTool", "args": {"directory": "output"}},
+                        "dir_search": {**base, "class": "DirectorySearchTool", "args": {"directory": "output"}},
+                        "web_rag": {**base, "class": "WebsiteSearchTool"},
+                        "scrape_website": {**base, "class": "ScrapeWebsiteTool"},
+                        "scrape_element": {**base, "class": "ScrapeElementFromWebsiteTool"},
+                    }
+                    return mapping.get(name, base)
+
+                spec = tool_spec(preset_tool_choice)
+                # Merge into structure
+                category_items = list(tools_map_all.get(preset_category, []) or [])
+                replaced = False
+                for i, it in enumerate(category_items):
+                    if isinstance(it, dict) and str(it.get("name", "")) == preset_tool_name:
+                        category_items[i] = spec
+                        replaced = True
+                        break
+                if not replaced:
+                    category_items.append(spec)
+                tools_map_all[preset_category] = category_items
+                payload = {"tools": tools_map_all}
+                ok, info = safe_write_text(selected_path, yaml.safe_dump(payload, sort_keys=False, allow_unicode=True))
+                (st.success if ok else st.error)(info)
+            except Exception as e:
+                st.error(f"Failed to add preset tool: {e}")
+    try:
+        existing = yaml.safe_load(read_text(selected_path) or "") or {}
+    except Exception as e:
+        st.error(f"Failed to parse existing YAML: {e}")
+        existing = {}
+    if not isinstance(existing, dict):
+        existing = {}
+    tools_map = dict(existing.get("tools", {}) or {})
+
+    # Category selection
+    categories = list(tools_map.keys())
+    cat_choice = st.selectbox("Select category", ["<create new category>"] + categories, key="tools_builder_category")
+    if cat_choice == "<create new category>":
+        category = st.text_input("New category name", key="tools_builder_new_category")
+        if not category:
+            st.info("Enter a category name to begin.")
+            return
+        items = []
+    else:
+        category = cat_choice
+        items = list(tools_map.get(category, []) or [])
+
+    # Tool selection
+    existing_names = [str(i.get("name", "")) for i in items if isinstance(i, dict)]
+    tool_choice = st.selectbox("Select tool", ["<create new tool>"] + existing_names, key="tools_builder_tool")
+    if tool_choice == "<create new tool>":
+        tool_name = st.text_input("New tool name", key="tools_builder_new_tool")
+        if not tool_name:
+            st.info("Enter a tool name to begin.")
+            return
+        current = {}
+    else:
+        tool_name = tool_choice
+        # find current by name
+        found = {}
+        for it in items:
+            if isinstance(it, dict) and str(it.get("name", "")) == tool_name:
+                found = it
+                break
+        current = dict(found or {})
+
+    st.markdown("### Tool configuration")
+    col1, col2 = st.columns(2)
+    with col1:
+        module = st.text_input("module", value=str(current.get("module", "")))
+        class_name = st.text_input("class", value=str(current.get("class", current.get("class_name", ""))))
+        enabled = st.checkbox("enabled", value=bool(current.get("enabled", True)), key=f"tools_enabled_{category}_{tool_name}")
+    with col2:
+        st.caption("args (YAML mapping)")
+        args_yaml = st.text_area("args", value=yaml.safe_dump(current.get("args", {}) or {}, sort_keys=False), height=140, key="tools_args")
+        st.caption("env (YAML mapping)")
+        env_yaml = st.text_area("env", value=yaml.safe_dump(current.get("env", {}) or {}, sort_keys=False), height=140, key="tools_env")
+
+    # Parse YAML fields
+    try:
+        args_obj = yaml.safe_load(args_yaml or "") or {}
+        if not isinstance(args_obj, dict):
+            st.error("args must be a YAML mapping (dict)")
+            return
+    except Exception as e:
+        st.error(f"Invalid args YAML: {e}")
+        return
+    try:
+        env_obj = yaml.safe_load(env_yaml or "") or {}
+        if not isinstance(env_obj, dict):
+            st.error("env must be a YAML mapping (dict)")
+            return
+    except Exception as e:
+        st.error(f"Invalid env YAML: {e}")
+        return
+
+    spec = {
+        "name": tool_name,
+        "module": module,
+        "class": class_name,
+        "enabled": enabled,
+        "args": args_obj,
+    }
+    if env_obj:
+        spec["env"] = env_obj
+
+    # Merge back into structure
+    new_tools_map = dict(tools_map)
+    cat_items = list(new_tools_map.get(category, []) or [])
+    replaced = False
+    for idx, it in enumerate(cat_items):
+        if isinstance(it, dict) and str(it.get("name", "")) == tool_name:
+            cat_items[idx] = spec
+            replaced = True
+            break
+    if not replaced:
+        cat_items.append(spec)
+    new_tools_map[category] = cat_items
+
+    out_payload = {"tools": new_tools_map}
+    preview = yaml.safe_dump(out_payload, sort_keys=False, allow_unicode=True)
+
+    st.markdown("### Preview")
+    st.code(preview, language="yaml")
+
+    if st.button("Save tools.yaml (with backup)", type="primary", key="tools_builder_save"):
+        ok, info = safe_write_text(selected_path, preview)
+        (st.success if ok else st.error)(info)
+
+
+def get_available_tool_names() -> List[str]:
+    names: List[str] = []
+    try:
+        if cfg is None:
+            return names
+        try:
+            crew_cfg = cfg.load_crew_config(PROJECT_ROOT)
+            tc = cfg.load_tools_config(PROJECT_ROOT, crew_cfg.tools_files)
+        except Exception:
+            tc = cfg.load_tools_config(PROJECT_ROOT)
+        for specs in (tc.tools or {}).values():
+            for spec in specs:
+                try:
+                    names.append(str(spec.name))
+                except Exception:
+                    continue
+        names = sorted(list({n for n in names if n}))
+    except Exception:
+        names = []
+    return names
+
+
+def agents_yaml_builder_ui(selected_path: Path) -> None:
+    """Form-based builder for config/agents.yaml (beta)."""
+    try:
+        existing = yaml.safe_load(read_text(selected_path) or "") or {}
+    except Exception as e:
+        st.error(f"Failed to parse existing YAML: {e}")
+        existing = {}
+    if not isinstance(existing, dict):
+        existing = {}
+
+    agent_names_existing = list(existing.keys())
+    choice = st.selectbox("Select agent to edit", ["<create new>"] + agent_names_existing, key="agents_builder_select")
+    if choice == "<create new>":
+        agent_name = st.text_input("New agent name", key="agents_builder_new_name")
+        if not agent_name:
+            st.info("Enter a new agent name to begin.")
+            return
+        current = {}
+    else:
+        agent_name = choice
+        current = dict(existing.get(agent_name, {}) or {})
+
+    st.markdown("### Agent configuration")
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        role = st.text_input("role", value=str(current.get("role", "")))
+        goal = st.text_input("goal", value=str(current.get("goal", "")))
+        backstory = st.text_area("backstory", value=str(current.get("backstory", "")), height=120)
+        verbose = st.checkbox("verbose", value=bool(current.get("verbose", True)), key=f"agents_verbose_{agent_name}")
+        enabled = st.checkbox("enabled", value=bool(current.get("enabled", True)), key=f"agents_enabled_{agent_name}")
+    with col2:
+        allow_delegation = st.checkbox("allow_delegation", value=bool(current.get("allow_delegation", False)), key=f"agents_allow_delegation_{agent_name}")
+        llm = st.text_input("llm", value=str(current.get("llm", "gpt-4o-mini")))
+        llm_temperature_str = st.text_input("llm_temperature (optional)", value=str(current.get("llm_temperature", "")))
+        max_rpm_str = st.text_input("max_rpm (optional)", value=str(current.get("max_rpm", "")))
+        max_iter_str = st.text_input("max_iter (optional)", value=str(current.get("max_iter", current.get("max_iterations", ""))))
+    with col3:
+        cache = st.checkbox("cache (optional)", value=bool(current.get("cache", False)), key=f"agents_cache_{agent_name}")
+        human_input = st.checkbox("human_input (optional)", value=bool(current.get("human_input", False)), key=f"agents_human_input_{agent_name}")
+        allow_code_execution = st.checkbox("allow_code_execution (optional)", value=bool(current.get("allow_code_execution", False)), key=f"agents_allow_code_{agent_name}")
+        multimodal = st.checkbox("multimodal (optional)", value=bool(current.get("multimodal", False)), key=f"agents_multimodal_{agent_name}")
+
+    # Tools selection
+    st.markdown("### Tools")
+    available_tools = get_available_tool_names()
+    default_tool_names = list(current.get("tool_names", current.get("tools", [])) or [])
+    tool_names = st.multiselect("tool_names", options=available_tools or default_tool_names, default=default_tool_names)
+
+    # Build agent object
+    agent_obj: Dict[str, object] = {
+        "role": role,
+        "goal": goal,
+        "backstory": backstory,
+        "verbose": verbose,
+        "allow_delegation": allow_delegation,
+        "enabled": enabled,
+        "tool_names": tool_names,
+        "llm": llm,
+    }
+    # Optional numerics
+    def _parse_int(s: str) -> int | None:
+        s = (s or "").strip()
+        if not s:
+            return None
+        try:
+            return int(s)
+        except Exception:
+            return None
+
+    def _parse_float(s: str) -> float | None:
+        s = (s or "").strip()
+        if not s:
+            return None
+        try:
+            return float(s)
+        except Exception:
+            return None
+
+    llm_temp_val = _parse_float(llm_temperature_str)
+    if llm_temp_val is not None:
+        agent_obj["llm_temperature"] = llm_temp_val
+    max_rpm_val = _parse_int(max_rpm_str)
+    if max_rpm_val is not None:
+        agent_obj["max_rpm"] = max_rpm_val
+    max_iter_val = _parse_int(max_iter_str)
+    if max_iter_val is not None:
+        agent_obj["max_iter"] = max_iter_val
+
+    # Optional booleans
+    if cache:
+        agent_obj["cache"] = True
+    if human_input:
+        agent_obj["human_input"] = True
+    if allow_code_execution:
+        agent_obj["allow_code_execution"] = True
+    if multimodal:
+        agent_obj["multimodal"] = True
+
+    # Merge and preview
+    updated_agents = dict(existing)
+    updated_agents[agent_name] = agent_obj
+    preview = yaml.safe_dump(updated_agents, sort_keys=False, allow_unicode=True)
+
+    st.markdown("### Preview")
+    st.code(preview, language="yaml")
+
+    if st.button("Save agents.yaml (with backup)", type="primary", key="agents_builder_save"):
+        ok, info = safe_write_text(selected_path, preview)
+        (st.success if ok else st.error)(info)
+
 # ---------- UI Sections ----------
 
 def ui_configs_tab():
@@ -85,53 +859,352 @@ def ui_configs_tab():
         st.info("No known YAML files found in config/.")
         return
 
-    file_paths = {f.name: f for f in files}
-    col1, col2 = st.columns([1, 2])
-    with col1:
-        selected_name = st.selectbox("Select a config file", list(file_paths.keys()))
-        selected_path = file_paths[selected_name]
-        st.caption(str(selected_path))
-        if st.button("Reload from disk"):
-            st.rerun()
+    # Map titles to paths (only include those that exist)
+    title_to_path = []
+    def add(title: str, filename: str):
+        p = CONFIG_DIR / filename
+        if p.exists():
+            title_to_path.append((title, p))
+    add("Crews", "crews.yaml")
+    add("Agents", "agents.yaml")
+    add("Tasks", "tasks.yaml")
+    add("Tools", "tools.yaml")
+    add("MCP Tools", "mcp_tools.yaml")
 
-    with col2:
-        content = st.text_area(
-            "Edit YAML content",
-            value=read_text(selected_path),
-            height=480,
-            key=f"yaml_editor_{selected_name}",
-        )
-        valid, msg = yaml_is_valid(content)
-        if valid:
-            st.success(msg)
-        else:
-            st.error(msg)
+    titles = [t for t, _ in title_to_path]
+    tabs = st.tabs(titles)
 
-        save_col1, save_col2 = st.columns([1, 1])
-        with save_col1:
-            if st.button("Save with backup", type="primary", disabled=not valid):
-                ok, info = safe_write_text(selected_path, content)
-                (st.success if ok else st.error)(info)
-        with save_col2:
-            st.markdown("### Validation")
-            if cfg is None:
-                st.error("Validation unavailable: could not import crew_composer.config_loader")
-            else:
-                crew_names = []
-                try:
-                    crew_names = cfg.list_crew_names(PROJECT_ROOT)
-                except Exception as e:
-                    st.warning(f"Could not list crews: {e}")
-                selected_crew = st.selectbox(
-                    "Crew to validate (optional)", ["<auto>"] + crew_names, key="validate_selected_crew"
-                )
-                if st.button("Run validation", key="run_validation"):
+    for (title, path), tab in zip(title_to_path, tabs):
+        with tab:
+            st.caption(str(path))
+            if title == "Crews":
+                editor_mode = st.radio("Editor mode", ["Builder (beta)", "Advanced editor"], horizontal=True, key=f"mode_{title}")
+                if editor_mode == "Builder (beta)":
+                    crews_yaml_builder_ui(path)
+                else:
+                    content = st.text_area(
+                        "Edit YAML content",
+                        value=read_text(path),
+                        height=480,
+                        key=f"yaml_editor_{path.name}",
+                    )
+                    valid, msg = yaml_is_valid(content)
+                    if valid:
+                        st.success(msg)
+                    else:
+                        st.error(msg)
+                    if st.button("Save with backup", type="primary", disabled=not valid, key=f"save_{title}"):
+                        ok, info = safe_write_text(path, content)
+                        (st.success if ok else st.error)(info)
+            elif title == "Agents":
+                editor_mode = st.radio("Editor mode", ["Builder (beta)", "Advanced editor"], horizontal=True, key=f"mode_{title}")
+                if editor_mode == "Builder (beta)":
+                    agents_yaml_builder_ui(path)
+                else:
+                    content = st.text_area(
+                        "Edit YAML content",
+                        value=read_text(path),
+                        height=480,
+                        key=f"yaml_editor_{path.name}",
+                    )
+                    valid, msg = yaml_is_valid(content)
+                    if valid:
+                        st.success(msg)
+                    else:
+                        st.error(msg)
+                    if st.button("Save with backup", type="primary", disabled=not valid, key=f"save_{title}"):
+                        ok, info = safe_write_text(path, content)
+                        (st.success if ok else st.error)(info)
+            elif title == "Tasks":
+                editor_mode = st.radio("Editor mode", ["Builder (beta)", "Advanced editor"], horizontal=True, key=f"mode_{title}")
+                if editor_mode == "Builder (beta)":
+                    tasks_yaml_builder_ui(path)
+                else:
+                    content = st.text_area(
+                        "Edit YAML content",
+                        value=read_text(path),
+                        height=480,
+                        key=f"yaml_editor_{path.name}",
+                    )
+                    valid, msg = yaml_is_valid(content)
+                    if valid:
+                        st.success(msg)
+                    else:
+                        st.error(msg)
+                    if st.button("Save with backup", type="primary", disabled=not valid, key=f"save_{title}"):
+                        ok, info = safe_write_text(path, content)
+                        (st.success if ok else st.error)(info)
+            elif title == "Tools":
+                editor_mode = st.radio("Editor mode", ["Builder (beta)", "Advanced editor"], horizontal=True, key=f"mode_{title}")
+                if editor_mode == "Builder (beta)":
+                    tools_yaml_builder_ui(path)
+                else:
+                    content = st.text_area(
+                        "Edit YAML content",
+                        value=read_text(path),
+                        height=480,
+                        key=f"yaml_editor_{path.name}",
+                    )
+                    valid, msg = yaml_is_valid(content)
+                    if valid:
+                        st.success(msg)
+                    else:
+                        st.error(msg)
+                    if st.button("Save with backup", type="primary", disabled=not valid, key=f"save_{title}"):
+                        ok, info = safe_write_text(path, content)
+                        (st.success if ok else st.error)(info)
+
+                # Bulk enable/disable UI
+                with st.expander("Bulk enable/disable tools", expanded=False):
                     try:
-                        crew_name = None if selected_crew == "<auto>" else selected_crew
-                        cfg.validate_all(PROJECT_ROOT, crew_name)
-                        st.success("Configuration validated successfully.")
+                        existing = yaml.safe_load(read_text(path) or "") or {}
                     except Exception as e:
-                        st.exception(e)
+                        st.error(f"Failed to parse tools.yaml: {e}")
+                        existing = {}
+                    tools_map = dict(existing.get("tools", {}) or {})
+                    any_tools = False
+                    for category, items in tools_map.items():
+                        if not isinstance(items, list):
+                            continue
+                        st.markdown(f"#### {category}")
+                        cols = st.columns(2)
+                        col_idx = 0
+                        for it in items:
+                            if not isinstance(it, dict):
+                                continue
+                            name = str(it.get("name", "")).strip()
+                            if not name:
+                                continue
+                            any_tools = True
+                            with cols[col_idx % 2]:
+                                key = f"bulk_tool_{category}_{name}"
+                                st.checkbox(
+                                    f"{name}",
+                                    value=bool(it.get("enabled", False)),
+                                    key=key,
+                                )
+                            col_idx += 1
+                    if not any_tools:
+                        st.info("No tools found to toggle.")
+                    else:
+                        if st.button("Save bulk changes", key="save_bulk_tools"):
+                            # Rebuild structure with updated enabled flags
+                            new_tools_map = {}
+                            for category, items in tools_map.items():
+                                new_items = []
+                                if isinstance(items, list):
+                                    for it in items:
+                                        if isinstance(it, dict):
+                                            nm = str(it.get("name", "")).strip()
+                                            if nm:
+                                                key = f"bulk_tool_{category}_{nm}"
+                                                new_it = dict(it)
+                                                new_it["enabled"] = bool(st.session_state.get(key, it.get("enabled", False)))
+                                                new_items.append(new_it)
+                                                continue
+                                        new_items.append(it)
+                                new_tools_map[category] = new_items
+                            payload = {"tools": new_tools_map}
+                            ok, info = safe_write_text(path, yaml.safe_dump(payload, sort_keys=False, allow_unicode=True))
+                            (st.success if ok else st.error)(info)
+            elif title == "MCP Tools":
+                editor_mode = st.radio("Editor mode", ["Builder (beta)", "Advanced editor"], horizontal=True, key=f"mode_{title}")
+                if editor_mode == "Builder (beta)":
+                    mcp_tools_yaml_builder_ui(path)
+                else:
+                    content = st.text_area(
+                        "Edit YAML content",
+                        value=read_text(path),
+                        height=480,
+                        key=f"yaml_editor_{path.name}_mcp",
+                    )
+                    valid, msg = yaml_is_valid(content)
+                    if valid:
+                        st.success(msg)
+                    else:
+                        st.error(msg)
+                    if st.button("Save with backup", type="primary", disabled=not valid, key=f"save_{title}_mcp"):
+                        ok, info = safe_write_text(path, content)
+                        (st.success if ok else st.error)(info)
+            else:
+                content = st.text_area(
+                    "Edit YAML content",
+                    value=read_text(path),
+                    height=480,
+                    key=f"yaml_editor_{path.name}",
+                )
+                valid, msg = yaml_is_valid(content)
+                if valid:
+                    st.success(msg)
+                else:
+                    st.error(msg)
+                if st.button("Save with backup", type="primary", disabled=not valid, key=f"save_{title}"):
+                    ok, info = safe_write_text(path, content)
+                    (st.success if ok else st.error)(info)
+
+    # Validation controls (crew-level) below the editors
+    st.markdown("### Validation")
+    if cfg is None:
+        st.error("Validation unavailable: could not import crew_composer.config_loader")
+    else:
+        try:
+            crew_names = cfg.list_crew_names(PROJECT_ROOT)
+        except Exception as e:
+            st.warning(f"Could not list crews: {e}")
+            crew_names = []
+        selected_crew = st.selectbox(
+            "Crew to validate (optional)", ["<auto>"] + crew_names, key="validate_selected_crew_configs_tab"
+        )
+        if st.button("Run validation", key="run_validation_configs_tab"):
+            try:
+                crew_name = None if selected_crew == "<auto>" else selected_crew
+                cfg.validate_all(PROJECT_ROOT, crew_name)
+                st.success("Configuration validated successfully.")
+            except Exception as e:
+                st.exception(e)
+
+    st.markdown("---")
+    st.markdown("## Run crew")
+    if cfg is None:
+        st.info("Running crews requires the local package import to succeed. Please fix imports first.")
+        return
+
+    # Crew selection
+    try:
+        all_crews = cfg.list_crew_names(PROJECT_ROOT)
+    except Exception as e:
+        all_crews = []
+        st.warning(f"Could not list crews: {e}")
+    col_run1, col_run2 = st.columns([1, 2])
+    with col_run1:
+        run_selected_crew = st.selectbox("Crew to run", ["<auto>"] + all_crews, key="run_selected_crew")
+        st.caption("Select a specific crew or use <auto> (first in crews.yaml)")
+    with col_run2:
+        inputs_mode = st.radio("Inputs mode (optional)", ["None", "JSON", "key=value pairs"], horizontal=True)
+        inputs_json = ""
+        inputs_pairs_text = ""
+        if inputs_mode == "JSON":
+            inputs_json = st.text_area("--inputs-json", placeholder='{"topic": "Hello World"}', height=100, key="inputs_json")
+        elif inputs_mode == "key=value pairs":
+            inputs_pairs_text = st.text_area("--inputs (one per line)", placeholder="topic=Hello World", height=100, key="inputs_pairs")
+
+    # MCP stdio warning
+    warn = mcp_stdio_required_warning(PROJECT_ROOT)
+    need_mcp = bool(warn)
+    mcp_available = False
+    try:
+        import importlib
+        importlib.import_module("mcp")
+        mcp_available = True
+    except Exception:
+        mcp_available = False
+    if need_mcp and not mcp_available:
+        st.warning(warn + "\nCurrently, 'mcp' does not appear to be installed. Install it with: pip install mcp")
+
+    # Validate before run option
+    validate_before_run = st.checkbox("Validate before run", value=True)
+
+    # Run button and streaming output
+    run_clicked = st.button("Run crew now", type="primary", disabled=(need_mcp and not mcp_available))
+    log_area = st.empty()
+
+    if run_clicked:
+        # Build command
+        cmd = [
+            sys.executable,
+            "-m",
+            "crew_composer.cli",
+            "run",
+        ]
+        if run_selected_crew != "<auto>":
+            cmd += ["--crew", run_selected_crew]
+        inputs_json = (inputs_json or "").strip()
+        if inputs_mode == "JSON" and inputs_json:
+            # validate JSON before passing
+            try:
+                json.loads(inputs_json)
+                cmd += ["--inputs-json", inputs_json]
+            except json.JSONDecodeError as e:
+                st.error(f"Invalid JSON: {e}")
+                return
+        elif inputs_mode == "key=value pairs" and inputs_pairs_text.strip():
+            pairs = [line.strip() for line in inputs_pairs_text.splitlines() if line.strip()]
+            # simple validation
+            for p in pairs:
+                if "=" not in p:
+                    st.error(f"Invalid pair '{p}'. Use key=value format.")
+                    return
+            for p in pairs:
+                cmd += ["--inputs", p]
+
+        # Optional validation gate
+        if validate_before_run:
+            try:
+                crew_name_for_validation = None if run_selected_crew == "<auto>" else run_selected_crew
+                cfg.validate_all(PROJECT_ROOT, crew_name_for_validation)
+                st.success("Validation passed. Starting run...")
+            except Exception as e:
+                st.error("Validation failed. Aborting run.")
+                st.exception(e)
+                return
+
+        st.info(f"Starting: {' '.join(cmd)}")
+        env = dict(**os.environ)
+        env["PYTHONUNBUFFERED"] = "1"
+        try:
+            with subprocess.Popen(
+                cmd,
+                cwd=str(PROJECT_ROOT),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                bufsize=1,
+                universal_newlines=True,
+                encoding="utf-8",
+                errors="replace",
+                env=env,
+            ) as proc:
+                logs: List[str] = []
+                for line in proc.stdout:  # type: ignore[union-attr]
+                    clean = strip_ansi(line.rstrip("\n"))
+                    logs.append(clean)
+                    # update UI periodically
+                    if len(logs) % 5 == 0:
+                        render_scrollable_logs(log_area, "\n".join(logs), height=420)
+                rc = proc.wait()
+                final_text = "\n".join(logs)
+                render_scrollable_logs(log_area, final_text, height=420)
+                # Save to session for later export
+                try:
+                    st.session_state["last_run_logs"] = final_text
+                    st.session_state["last_run_crew"] = run_selected_crew
+                    st.session_state["last_run_time"] = datetime.now().strftime("%Y%m%d-%H%M%S")
+                except Exception:
+                    pass
+                if rc == 0:
+                    st.success("Crew finished successfully.")
+                else:
+                    st.error(f"Crew process exited with code {rc}.")
+        except FileNotFoundError as e:
+            st.error(f"Failed to start process: {e}")
+        except Exception as e:
+            st.exception(e)
+
+    # Offer Save Logs for the last run if available
+    last_logs = st.session_state.get("last_run_logs") if hasattr(st, "session_state") else None
+    if last_logs:
+        st.markdown("### Save last run logs")
+        default_ts = st.session_state.get("last_run_time", datetime.now().strftime("%Y%m%d-%H%M%S"))
+        crew_tag = st.session_state.get("last_run_crew", "auto")
+        suggested = f"{default_ts}_{crew_tag if crew_tag != '<auto>' else 'auto'}.log"
+        log_filename = st.text_input("Filename", value=suggested, key="save_logs_filename")
+        if st.button("Save logs to file", key="save_logs_button"):
+            try:
+                RUN_LOGS_DIR.mkdir(parents=True, exist_ok=True)
+                out_path = RUN_LOGS_DIR / log_filename
+                out_path.write_text(str(last_logs), encoding="utf-8")
+                st.success(f"Saved logs to {out_path}")
+            except Exception as e:
+                st.error(f"Failed to save logs: {e}")
 
 
 def ui_knowledge_tab():
@@ -200,6 +1273,93 @@ def ui_knowledge_tab():
                 st.error(f"Failed to delete: {e}")
 
 
+def ui_outputs_tab():
+    st.subheader("View output/ files")
+    if not OUTPUT_DIR.exists():
+        st.info("The output/ directory does not exist yet.")
+        return
+    files = sorted([p for p in OUTPUT_DIR.rglob("*") if p.is_file()])
+    if not files:
+        st.info("No files in output/ yet.")
+        return
+
+    rel_names = [str(p.relative_to(OUTPUT_DIR)) for p in files]
+    selected = st.selectbox("Select a file", rel_names, key="outputs_select_file")
+    path = OUTPUT_DIR / selected
+    st.caption(str(path))
+
+    ext = path.suffix.lower()
+    try:
+        if ext == ".md":
+            mode = st.radio("View mode", ["Rendered", "Raw"], horizontal=True, key="outputs_md_mode")
+            content = read_text(path)
+            if mode == "Rendered":
+                st.markdown(content)
+            else:
+                st.text_area("Raw markdown", value=content, height=480, key="outputs_md_raw")
+        elif ext in {".txt", ".log", ".yaml", ".yml", ".csv"}:
+            content = read_text(path)
+            st.text_area("File content", value=content, height=480, key="outputs_text_raw")
+            if ext in {".yaml", ".yml"}:
+                valid, msg = yaml_is_valid(content)
+                (st.success if valid else st.error)(msg)
+        elif ext == ".json":
+            content = read_text(path)
+            try:
+                parsed = json.loads(content or "null")
+                st.json(parsed)
+            except Exception as e:
+                st.error(f"Invalid JSON: {e}")
+                st.text_area("Raw JSON", value=content, height=480, key="outputs_json_raw")
+        else:
+            st.info("Binary or unsupported file preview.")
+    except Exception as e:
+        st.error(f"Failed to read file: {e}")
+
+    st.download_button("Download", data=path.read_bytes(), file_name=path.name)
+    if st.button("Refresh list"):
+        st.rerun()
+
+
+def ui_docs_tab():
+    st.subheader("View docs/ Markdown files")
+    if not DOCS_DIR.exists():
+        st.info("The docs/ directory does not exist yet.")
+        return
+    files = sorted([p for p in DOCS_DIR.rglob("*.md") if p.is_file()])
+    if not files:
+        st.info("No Markdown files in docs/ yet.")
+        return
+
+    rel_names = [str(p.relative_to(DOCS_DIR)) for p in files]
+    filter_text = st.text_input("Filter files", value="", placeholder="Type to filter by path/name", key="docs_filter")
+    if filter_text:
+        lowered = filter_text.lower()
+        rel_names = [n for n in rel_names if lowered in n.lower()]
+        if not rel_names:
+            st.info("No files match this filter.")
+            return
+    # Default to main.md if present
+    default_idx = 0
+    for i, name in enumerate(rel_names):
+        if name.endswith("main.md") or name == "main.md":
+            default_idx = i
+            break
+    selected = st.selectbox("Select a document", rel_names, index=default_idx, key="docs_select_file")
+    path = DOCS_DIR / selected
+    st.caption(str(path))
+
+    try:
+        content = read_text(path)
+        st.markdown(content)
+    except Exception as e:
+        st.error(f"Failed to read document: {e}")
+        return
+
+    st.download_button("Download", data=path.read_bytes(), file_name=path.name)
+    if st.button("Refresh list", key="docs_refresh"):
+        st.rerun()
+
 def ui_env_tab():
     st.subheader("Manage .env file")
     if not ENV_FILE.exists():
@@ -267,14 +1427,18 @@ def main():
             "Failed to import crew_composer.config_loader. Validation features will be limited.\n" + cfg_import_error
         )
 
-    tabs = st.tabs(["Configs", "Knowledge", ".env", "About"])
+    tabs = st.tabs(["Configs", "Knowledge", "Outputs", ".env", "Docs", "About"])
     with tabs[0]:
         ui_configs_tab()
     with tabs[1]:
         ui_knowledge_tab()
     with tabs[2]:
-        ui_env_tab()
+        ui_outputs_tab()
     with tabs[3]:
+        ui_env_tab()
+    with tabs[4]:
+        ui_docs_tab()
+    with tabs[5]:
         ui_about_tab()
 
 

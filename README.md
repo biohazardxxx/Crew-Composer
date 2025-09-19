@@ -8,6 +8,7 @@ A modular, configuration-driven composer for building CrewAI apps that are easy 
 - [Project Structure](#project-structure)
 - [Documentation](#documentation)
 - [Setup (Windows PowerShell)](#setup-windows-powershell)
+- [Streamlit UI](#streamlit-ui)
 - [Configuration](#configuration)
   - [Renaming tasks safely (config-driven with context)](#renaming-tasks-safely-config-driven-with-context)
   - [Task enablement and agent mapping](#task-enablement-and-agent-mapping)
@@ -27,6 +28,7 @@ A modular, configuration-driven composer for building CrewAI apps that are easy 
 - **CLI**: `crew-composer` (alias: `crew-comp`) for validate/list/run/show and `crewai run` compatibility.
 - **Validation**: Pydantic-backed validation, clear error messages.
 - **.env support**: Environment variable interpolation like `${VAR}` or `${VAR:default}`.
+- **Streamlit UI**: Manage configs with Builder UIs, run crews with live logs, quick-add presets for tools/MCP, bulk toggle tools, and browse outputs (Markdown raw/rendered).
 
 ## Project Structure
 
@@ -70,6 +72,7 @@ A modular, configuration-driven composer for building CrewAI apps that are easy 
 - [Configuration Guide](docs/configuration.md)
 - [Multi-Agent Task Mapping](docs/multi-agent-mapping.md)
 - [CLI Usage](docs/cli.md)
+- [Streamlit UI](docs/ui.md)
 - [Tools and MCP Integration](docs/tools-and-mcp.md)
 - [Knowledge Sources](docs/knowledge-sources.md)
 - [Troubleshooting](docs/troubleshooting.md)
@@ -111,6 +114,32 @@ Copy-Item .env.example .env
 ```powershell
 python -m pip install mcp
 ```
+
+## Streamlit UI
+
+Launch the UI to manage configs, run crews, and review outputs without editing YAML by hand.
+
+1. Activate your virtual environment
+
+```powershell
+./venv/Scripts/Activate.ps1
+```
+
+1. Start the app
+
+```powershell
+python -m streamlit run app/streamlit_app.py
+```
+
+Key capabilities:
+
+- Builder mode for `crews.yaml`, `agents.yaml`, `tasks.yaml`, `tools.yaml`, and `mcp_tools.yaml` with YAML previews and safe backups.
+- Quick presets: add common tool specs and MCP server templates (STDIO, SSE, Streamable HTTP) from the UI.
+- Bulk enable/disable tools across categories.
+- Run a crew with live streaming logs, then save logs to `output/run-logs/<timestamp>_<crew>.log`.
+- Outputs tab to browse `output/` with Markdown Raw/Rendered toggle, JSON viewer, and downloads.
+
+See the full guide: [docs/ui.md](docs/ui.md)
 
 ## Configuration
 
