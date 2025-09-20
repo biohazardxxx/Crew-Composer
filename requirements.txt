@@ -11,3 +11,14 @@ firecrawl>=1.0.0
 
 # UI
 streamlit>=1.35.0
+
+# Scheduler
+APScheduler>=3.11.0
+filelock>=3.19.1
+
+# Observability (optional - install only if you enable tracing)
+# openinference-instrumentation-crewai>=0.1.13
+# openinference-instrumentation-openai>=0.1.13
+# opentelemetry-sdk>=1.27.0
+# opentelemetry-exporter-otlp-proto-http>=1.27.0
+# phoenix>=7.0.0

@@ -15,6 +15,8 @@ try:
         ui_env_tab,
         ui_knowledge_tab,
         ui_outputs_tab,
+        ui_observability_tab,
+        ui_schedules_tab,
     )
 except Exception:  # noqa: BLE001
     # Fall back to absolute imports by adding the project's src/ to sys.path
@@ -30,6 +32,8 @@ except Exception:  # noqa: BLE001
         ui_env_tab,
         ui_knowledge_tab,
         ui_outputs_tab,
+        ui_observability_tab,
+        ui_schedules_tab,
     )
 
 
@@ -38,7 +42,7 @@ def main() -> None:
     st.title("Crew Composer Manager")
     st.caption(str(PROJECT_ROOT))
 
-    tabs = st.tabs(["Configs", "Knowledge", "Outputs", ".env", "Docs", "About"])
+    tabs = st.tabs(["Configs", "Knowledge", "Outputs", ".env", "Schedules", "Observability", "Docs", "About"])
     with tabs[0]:
         ui_configs_tab()
     with tabs[1]:
@@ -48,8 +52,12 @@ def main() -> None:
     with tabs[3]:
         ui_env_tab()
     with tabs[4]:
-        ui_docs_tab()
+        ui_schedules_tab()
     with tabs[5]:
+        ui_observability_tab()
+    with tabs[6]:
+        ui_docs_tab()
+    with tabs[7]:
         ui_about_tab()
 
 

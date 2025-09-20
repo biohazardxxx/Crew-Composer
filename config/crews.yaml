@@ -44,4 +44,13 @@ crews:
     # Explicitly map tasks to agents
     task_agent_map:
       web_content_research_task: researcher
-      reporting_task: [researcher, report_writer]
+      reporting_task:
+      - researcher
+      - report_writer
+    observability:
+      enabled: true
+      provider: phoenix
+      instrument_crewai: true
+      instrument_openai: false
+      otlp_endpoint: http://127.0.0.1:4318
+      launch_ui: true

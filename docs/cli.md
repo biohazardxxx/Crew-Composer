@@ -48,3 +48,45 @@ Notes:
 ```powershell
 crewai run
 ```
+
+## Scheduling Commands
+
+These commands manage scheduled runs and the scheduler service. Schedules are stored in `db/schedules.json` (git-ignored by default).
+
+- `crew-composer schedule-service [--poll SECONDS]`
+  - Start the background scheduler service that watches the schedules file and executes jobs.
+  - Options:
+    - `--poll` (default: 5) seconds between schedule file checks.
+
+- `crew-composer schedule-list`
+  - Print all schedules as JSON.
+
+- `crew-composer schedule-upsert [options]`
+  - Create or update a schedule. Options:
+    - `--id` Optional ID (omit to create a new schedule)
+    - `--name` Human-friendly name
+    - `--crew` Crew name (defaults to first crew when omitted)
+    - `--trigger` `date` | `interval` | `cron` (default: `date`)
+    - `--run_at` ISO datetime for `date` trigger (e.g., `2025-09-19T10:00:00`)
+    - `--interval_seconds` Integer seconds for `interval` trigger
+    - `--cron-json` JSON object for cron fields, e.g. `{ "minute": "0", "hour": "*" }`
+    - `--timezone` Optional timezone name (not required; default system)
+    - `--enabled / --no-enabled` Enable the schedule (default: enabled)
+    - `--inputs-json` JSON object for kickoff inputs
+    - `--inputs` one or more `key=value` pairs for inputs
+
+  - Examples:
+
+```powershell
+# Run once at a given time using the default crew
+crew-composer schedule-upsert --name ReportOnce --trigger date --run_at 2025-09-20T09:00:00 --inputs topic="Daily Report"
+
+# Run every hour for the 'research' crew
+crew-composer schedule-upsert --name HourlyResearch --crew research --trigger interval --interval_seconds 3600 --inputs topic="AI"
+
+# Run daily at 08:00 using cron
+crew-composer schedule-upsert --name MorningJob --trigger cron --cron-json '{"minute":"0","hour":"8"}'
+```
+
+- `crew-composer schedule-delete ID`
+  - Delete a schedule by its `id`.

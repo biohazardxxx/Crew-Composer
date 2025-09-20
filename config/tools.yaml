@@ -359,3 +359,15 @@ tools:
       args: {}
       env:
         COMPOSIO_API_KEY: ${COMPOSIO_API_KEY}
+
+  scheduling:
+    - name: schedule_manager
+      module: crew_composer.tools.schedule_tool
+      class: ScheduleManagerTool
+      enabled: false
+      args: {}
+      # Optional defaults (example):
+      # args:
+      #   default_crew: "your_crew_name"
+      #   default_trigger: "interval"
+      #   default_timezone: "UTC"

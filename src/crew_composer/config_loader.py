@@ -59,6 +59,16 @@ class CrewConfig(BaseModel):
     knowledge: Dict[str, Any] = Field(default_factory=dict)
     # Optional list of knowledge source keys to load from agents.knowledge.yaml
     knowledge_sources: Optional[List[str]] = None
+    # Optional observability setup (e.g., OpenTelemetry/OpenInference/Phoenix)
+    # Example in config/crews.yaml:
+    #   observability:
+    #     enabled: true
+    #     provider: "phoenix"  # or "otlp"
+    #     otlp_endpoint: "${OTEL_EXPORTER_OTLP_ENDPOINT:http://127.0.0.1:4318}"
+    #     instrument_crewai: true
+    #     instrument_openai: true
+    #     launch_ui: false
+    observability: Dict[str, Any] = Field(default_factory=dict)
     # When true, CLI will kickoff the crew asynchronously
     run_async: bool = Field(default=False)
     # Optional manager agent name from agents.yaml (e.g., 'researcher')

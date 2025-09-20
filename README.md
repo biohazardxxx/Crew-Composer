@@ -15,6 +15,7 @@ A modular, configuration-driven composer for building CrewAI apps that are easy 
   - [Collaborative multi-agent execution (list mapping and pipelines)](#collaborative-multi-agent-execution-list-mapping-and-pipelines)
 - [CLI Usage](#cli-usage)
 - [MCP Integration](#mcp-integration)
+- [Scheduling](#scheduling)
 - [Troubleshooting](#troubleshooting)
 - [Notes on Extensibility](#notes-on-extensibility)
 - [License](#license)
@@ -29,6 +30,7 @@ A modular, configuration-driven composer for building CrewAI apps that are easy 
 - **Validation**: Pydantic-backed validation, clear error messages.
 - **.env support**: Environment variable interpolation like `${VAR}` or `${VAR:default}`.
 - **Streamlit UI**: Manage configs with Builder UIs, run crews with live logs, quick-add presets for tools/MCP, bulk toggle tools, and browse outputs (Markdown raw/rendered).
+- **Scheduling**: File-backed schedules with APScheduler. Manage schedules via CLI and the Streamlit Schedules tab. Optional in-crew tool `schedule_manager` enables agents to create/update/delete schedules.
 
 ## Project Structure
 
@@ -73,6 +75,7 @@ A modular, configuration-driven composer for building CrewAI apps that are easy 
 - [Multi-Agent Task Mapping](docs/multi-agent-mapping.md)
 - [CLI Usage](docs/cli.md)
 - [Streamlit UI](docs/ui.md)
+- [Scheduling](docs/scheduling.md)
 - [Tools and MCP Integration](docs/tools-and-mcp.md)
 - [Knowledge Sources](docs/knowledge-sources.md)
 - [Troubleshooting](docs/troubleshooting.md)
@@ -154,6 +157,7 @@ Key capabilities:
 - Bulk enable/disable tools across categories.
 - Run a crew with live streaming logs, then save logs to `output/run-logs/<timestamp>_<crew>.log`.
 - Outputs tab to browse `output/` with Markdown Raw/Rendered toggle, JSON viewer, and downloads.
+- New Schedules tab to list/create/delete schedules and start/stop the scheduler service.
 
 See the full guide: [docs/ui.md](docs/ui.md)
 
@@ -317,6 +321,25 @@ crewai run
 
 It auto-detects `@CrewBase` in `src/crew_composer/crew.py`.
 
+### Scheduling via CLI
+
+Manage scheduled runs and the background service:
+
+```powershell
+# Start the background scheduler service
+crew-composer schedule-service --poll 5
+
+# Create or update schedules
+crew-composer schedule-upsert --name Hourly --trigger interval --interval_seconds 3600 --inputs topic="AI"
+crew-composer schedule-upsert --name MorningJob --trigger cron --cron-json '{"minute":"0","hour":"8"}'
+
+# List and delete
+crew-composer schedule-list
+crew-composer schedule-delete <ID>
+```
+
+See the full guide: [docs/scheduling.md](docs/scheduling.md)
+
 ## MCP Integration
 
 Use `config/mcp_tools.yaml` to declare MCP servers. Enabled servers are connected at startup and their tools are registered dynamically.
@@ -355,6 +378,60 @@ Notes:
 - `list-tools` shows all resolved tool names including MCP ones.
 - If using stdio, install `mcp` (`pip install mcp`). SSE/HTTP do not require it.
 
+## Observability
+
+This template supports config-driven observability using OpenTelemetry and OpenInference, with optional Arize Phoenix integration.
+
+Key implementation points:
+
+- `src/crew_composer/observability.py` initializes tracing and instrumentation (best-effort, optional deps).
+- `src/crew_composer/cli.py` initializes observability in `run()` before building tools and crews.
+- `src/crew_composer/crew.py` initializes observability in `ConfigDrivenCrew.__init__()` so Streamlit/UI runs are also covered.
+
+### Enable via `config/crews.yaml`
+
+Add an `observability` block under your crew (values shown include defaults):
+
+```yaml
+crews:
+  default:
+    # ... existing config ...
+    observability:
+      enabled: true
+      provider: phoenix  # or "otlp"
+      otlp_endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://127.0.0.1:4318}
+      instrument_crewai: true
+      instrument_openai: false
+      launch_ui: false
+```
+
+Notes:
+
+- **provider: phoenix** registers Phoenix’s OpenTelemetry hooks (`phoenix.otel.register()`).
+- **provider: otlp** configures a standard OTLP HTTP exporter at `otlp_endpoint` (default `http://127.0.0.1:4318`).
+- **instrument_crewai** uses OpenInference to instrument CrewAI spans.
+- **instrument_openai** optionally instruments OpenAI client spans via OpenInference.
+- **launch_ui** attempts to auto-launch the Phoenix UI when available (best-effort; optional).
+
+### Install optional dependencies (Windows PowerShell)
+
+Make sure you are in your virtual environment (`venv`) before installing:
+
+```powershell
+./venv/Scripts/Activate.ps1
+python -m pip install \
+  openinference-instrumentation-crewai openinference-instrumentation-openai \
+  opentelemetry-sdk opentelemetry-exporter-otlp-proto-http \
+  phoenix
+```
+
+You can also uncomment the optional lines at the bottom of `requirements.txt` and install from there.
+
+### View traces
+
+- With Phoenix: run your Phoenix collector/UI, enable `provider: phoenix`, then run a crew. Spans will appear in Phoenix.
+- With OTLP: point `otlp_endpoint` to your collector (e.g., `http://localhost:4318`) and use your preferred UI (e.g., Phoenix, Tempo + Grafana, etc.).
+
 ## Troubleshooting
 
 - **ConfigNotFoundError / InvalidConfigError**: Ensure YAML files exist and are valid mappings.
@@ -374,3 +451,7 @@ Notes:
 ## License
 
 MIT
+
+Third-party dependencies used by this project are licensed under permissive licenses such as MIT, BSD, or Apache-2.0. When redistributing builds or source, retain the original license texts and notices for those packages (e.g., Apache-2.0 NOTICE requirements for packages like `streamlit`).
+
+For convenience, you may generate an attribution report (e.g., `THIRD_PARTY_LICENSES.txt`) from your current environment using a license scanner. This repository aims to keep such attributions up to date.

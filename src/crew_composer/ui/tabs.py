@@ -32,6 +32,14 @@ from .utils import (
     yaml_is_valid,
 )
 
+# Scheduler integration
+from ..scheduler import (
+    list_schedules as sched_list,
+    upsert_schedule as sched_upsert,
+    delete_schedule as sched_delete,
+    ScheduleEntry,
+)
+
 
 # ----- Builders (imported from original app) -----
 
@@ -78,89 +86,336 @@ def crews_yaml_builder_ui(selected_path: Path) -> None:
             ["sequential", "hierarchical"],
             index=0 if str(current.get("process", "sequential")).lower() == "sequential" else 1,
         )
-        verbose = st.checkbox("verbose", value=bool(current.get("verbose", True)), key=f"crews_verbose_{crew_name}")
-        memory = st.checkbox("memory", value=bool(current.get("memory", False)), key=f"crews_memory_{crew_name}")
-        run_async = st.checkbox("run_async", value=bool(current.get("run_async", False)), key=f"crews_run_async_{crew_name}")
-    with col_b:
-        planning = st.checkbox("planning", value=bool(current.get("planning", False)), key=f"crews_planning_{crew_name}")
-        planning_llm = st.text_input("planning_llm", value=str(current.get("planning_llm", "")))
-        manager_llm = st.text_input("manager_llm", value=str(current.get("manager_llm", "gpt-4o-mini")))
-        manager_agent = st.text_input("manager_agent (name)", value=str(current.get("manager_agent", "")))
-    with col_c:
-        st.caption("knowledge (YAML mapping)")
-        knowledge_yaml = st.text_area(
-            "knowledge",
-            value=yaml.safe_dump(current.get("knowledge", {}) or {}, sort_keys=False),
-            height=120,
-            key="builder_knowledge",
-        )
-        ks_list = current.get("knowledge_sources", None)
-        ks_csv_default = ", ".join(ks_list) if isinstance(ks_list, list) else ""
-        knowledge_sources_csv = st.text_input("knowledge_sources (comma-separated)", value=ks_csv_default)
 
-    st.markdown("### Agents and tasks")
-    selected_agents = st.multiselect(
-        "crew.agents (allowlist; empty = build all enabled agents)",
-        options=agent_names,
-        default=list(current.get("agents", []) or []),
-    )
-    ordered_tasks = st.multiselect(
-        "crew.task_order (order matters)", options=task_names, default=list(current.get("task_order", []) or task_names)
-    )
 
-    with st.expander("Task to agent mapping", expanded=False):
-        task_agent_map: Dict[str, List[str]] = {}
-        existing_map = current.get("task_agent_map", {}) if isinstance(current, dict) else {}
-        for t in ordered_tasks:
-            default_for_t = existing_map.get(t, [])
-            if isinstance(default_for_t, str):
-                default_for_t = [default_for_t]
-            sel = st.multiselect(f"Agents for task '{t}'", options=agent_names, default=list(default_for_t or []), key=f"map_{t}")
-            if sel:
-                task_agent_map[t] = sel
+def _kv_to_dict(items_text: str) -> Dict[str, str]:
+    data: Dict[str, str] = {}
+    for line in (items_text or "").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        data[k.strip()] = v.strip()
+    return data
 
-    st.markdown("### Tool files")
-    default_tools_files = current.get("tools_files", ["config/tools.yaml", "config/mcp_tools.yaml"]) or []
-    tools_files = st.multiselect("tools_files", options=["config/tools.yaml", "config/mcp_tools.yaml"], default=default_tools_files)
 
+def ui_schedules_tab():
+    st.subheader("Schedules")
+    st.caption("Backed by db/schedules.json. Use 'crew-composer schedule-service' to run the scheduler.")
+
+    # Service controls
+    with st.expander("Scheduler service", expanded=False):
+        col1, col2 = st.columns(2)
+        with col1:
+            poll = st.number_input("Poll seconds", min_value=1, max_value=60, value=5, step=1)
+            if st.button("Start service", key="sched_start"):
+                try:
+                    # Launch as background subprocess; keep handle in session_state
+                    cmd = [sys.executable, "-m", "crew_composer.cli", "schedule-service", "--poll", str(poll)]
+                    proc = subprocess.Popen(cmd, cwd=str(PROJECT_ROOT))  # nosec B603
+                    st.session_state["_sched_pid"] = proc.pid
+                    st.success(f"Scheduler started (PID {proc.pid}).")
+                except Exception as e:  # noqa: BLE001
+                    st.error(f"Failed to start service: {e}")
+        with col2:
+            pid = st.session_state.get("_sched_pid")
+            if st.button("Stop service", key="sched_stop"):
+                try:
+                    if pid:
+                        if os.name == "nt":
+                            subprocess.check_call(["taskkill", "/PID", str(pid), "/F"])  # nosec B603
+                        else:
+                            os.kill(pid, 9)
+                        st.session_state.pop("_sched_pid", None)
+                        st.success("Scheduler stopped.")
+                    else:
+                        st.info("No known scheduler PID in this session.")
+                except Exception as e:  # noqa: BLE001
+                    st.error(f"Failed to stop service: {e}")
+
+    st.markdown("---")
+
+    # Existing schedules
+    entries = []
     try:
-        knowledge_obj = yaml.safe_load(knowledge_yaml or "") or {}
-        if not isinstance(knowledge_obj, dict):
-            st.error("knowledge must be a YAML mapping (dict)")
-            return
+        entries = sched_list()
     except Exception as e:  # noqa: BLE001
-        st.error(f"Invalid knowledge YAML: {e}")
-        return
+        st.error(f"Failed to load schedules: {e}")
 
-    ks_clean = [s.strip() for s in (knowledge_sources_csv or "").split(",") if s.strip()]
-    crew_obj: Dict[str, object] = {
-        "process": process,
-        "verbose": verbose,
-        "planning": planning,
-        "planning_llm": planning_llm or None,
-        "manager_llm": manager_llm or None,
-        "memory": memory,
-        "knowledge": knowledge_obj,
-        "knowledge_sources": ks_clean if ks_clean else None,
-        "run_async": run_async,
-        "manager_agent": manager_agent or None,
-        "agents": selected_agents,
-        "task_order": ordered_tasks,
-        "task_agent_map": task_agent_map,
-        "tools_files": tools_files or ["config/tools.yaml", "config/mcp_tools.yaml"],
+    st.markdown("### Existing schedules")
+    if not entries:
+        st.info("No schedules yet.")
+    else:
+        for e in entries:
+            with st.expander(f"{e.name} (id={e.id})", expanded=False):
+                st.json(e.model_dump())
+                cols = st.columns(3)
+                with cols[0]:
+                    if st.button("Delete", key=f"del_{e.id}"):
+                        try:
+                            ok = sched_delete(e.id)
+                            (st.success if ok else st.warning)("Deleted" if ok else "Not found")
+                            st.rerun()
+                        except Exception as ex:  # noqa: BLE001
+                            st.error(f"Delete failed: {ex}")
+
+    st.markdown("---")
+    st.markdown("### Create or update schedule")
+
+    # Load crew names for selection
+    try:
+        crew_names = cfg.list_crew_names(PROJECT_ROOT)
+    except Exception:
+        crew_names = []
+
+    with st.form("schedule_form"):
+        colA, colB = st.columns(2)
+        with colA:
+            sid = st.text_input("id (leave blank to create)")
+            name = st.text_input("name")
+            crew = st.selectbox("crew (optional)", ["<default>"] + crew_names, index=0)
+            enabled = st.checkbox("enabled", value=True)
+        with colB:
+            trigger = st.selectbox("trigger", ["date", "interval", "cron"], index=0)
+            run_at = st.text_input("run_at (ISO) for date trigger", placeholder="2025-09-19T10:00:00")
+            interval_seconds = st.number_input("interval_seconds", min_value=0, max_value=1_000_000, value=0, step=60)
+            cron_text = st.text_input("cron JSON (e.g., {\"minute\": \"0\", \"hour\": \"*\"})", value="")
+            st.markdown("[Cron expression generator](https://crontab-generator.org/)")
+
+        inputs_mode = st.radio("Inputs format", ["JSON", "key=value lines"], horizontal=True)
+        if inputs_mode == "JSON":
+            inputs_json = st.text_area("inputs JSON", value="{}", height=120)
+            try:
+                inputs_data = json.loads(inputs_json or "{}")
+                if not isinstance(inputs_data, dict):
+                    raise ValueError("inputs JSON must be an object")
+                inputs_err = None
+            except Exception as ex:  # noqa: BLE001
+                inputs_err = str(ex)
+                inputs_data = {}
+        else:
+            inputs_lines = st.text_area("inputs (key=value per line)", value="", height=120)
+            inputs_data = _kv_to_dict(inputs_lines)
+            inputs_err = None
+
+        submitted = st.form_submit_button("Save schedule", type="primary")
+        if submitted:
+            if inputs_err:
+                st.error(f"Invalid inputs: {inputs_err}")
+            else:
+                try:
+                    cron_map = None
+                    if cron_text.strip():
+                        cron_map = json.loads(cron_text)
+                        if not isinstance(cron_map, dict):
+                            raise ValueError("cron must decode to an object")
+                    entry = ScheduleEntry(
+                        id=sid or "",
+                        name=name or (sid or ""),
+                        crew=(None if crew == "<default>" else crew),
+                        trigger=trigger,  # type: ignore[arg-type]
+                        run_at=(run_at or None),
+                        interval_seconds=(int(interval_seconds) or None),
+                        cron=cron_map,
+                        timezone=None,
+                        enabled=enabled,
+                        inputs=inputs_data or {},
+                    )
+                    # Assign an id if creating new
+                    if not entry.id:
+                        import uuid as _uuid
+                        entry.id = str(_uuid.uuid4())
+                        if not entry.name:
+                            entry.name = entry.id
+                    saved = sched_upsert(entry)
+                    st.success(f"Saved schedule {saved.id}")
+                    st.rerun()
+                except Exception as ex:  # noqa: BLE001
+                    st.error(f"Save failed: {ex}")
+                
+
+
+def ui_observability_tab():
+    st.subheader("Observability")
+    crews_path = CONFIG_DIR / "crews.yaml"
+    st.caption(str(crews_path))
+
+    # Load existing crews.yaml (if any)
+    try:
+        existing_all = yaml.safe_load(read_text(crews_path) or "") or {}
+    except Exception as e:  # noqa: BLE001
+        st.error(f"Failed to parse crews.yaml: {e}")
+        existing_all = {}
+    if not isinstance(existing_all, dict):
+        existing_all = {}
+
+    crews_map = dict(existing_all.get("crews", {}) or {})
+    crew_names = list(crews_map.keys())
+
+    # Crew selection or creation
+    choice = st.selectbox(
+        "Select crew to configure",
+        (["<create new>"] + crew_names) if crew_names else ["<create new>", "default"],
+        key="obs_select_crew",
+    )
+    if choice == "<create new>":
+        crew_name = st.text_input("New crew name", value="default", key="obs_new_crew_name").strip()
+        if not crew_name:
+            st.info("Enter a crew name to begin.")
+            return
+        current_crew = dict(crews_map.get(crew_name, {}) or {})
+    else:
+        crew_name = choice
+        current_crew = dict(crews_map.get(crew_name, {}) or {})
+
+    # Current observability block
+    current_obs = dict(current_crew.get("observability", {}) or {})
+
+    st.markdown("### Settings")
+    col1, col2 = st.columns(2)
+    with col1:
+        enabled = st.checkbox("enabled", value=bool(current_obs.get("enabled", False)), key=f"obs_enabled_{crew_name}")
+        provider = st.selectbox(
+            "provider",
+            ["phoenix", "otlp"],
+            index={"phoenix": 0, "otlp": 1}.get(str(current_obs.get("provider", "phoenix")).lower(), 0),
+            key=f"obs_provider_{crew_name}",
+        )
+        otlp_endpoint = st.text_input(
+            "otlp_endpoint (for OTLP)",
+            value=str(current_obs.get("otlp_endpoint", "http://127.0.0.1:4318")),
+            key=f"obs_otlp_{crew_name}",
+        )
+    with col2:
+        instrument_crewai = st.checkbox(
+            "instrument_crewai",
+            value=bool(current_obs.get("instrument_crewai", True)),
+            key=f"obs_instr_crewai_{crew_name}",
+        )
+        instrument_openai = st.checkbox(
+            "instrument_openai",
+            value=bool(current_obs.get("instrument_openai", False)),
+            key=f"obs_instr_openai_{crew_name}",
+        )
+        launch_ui = st.checkbox(
+            "launch_ui (Phoenix only)",
+            value=bool(current_obs.get("launch_ui", False)),
+            key=f"obs_launch_ui_{crew_name}",
+        )
+
+    # Assemble obs spec
+    obs_spec: Dict[str, object] = {
+        "enabled": enabled,
+        "provider": provider,
+        "instrument_crewai": instrument_crewai,
+        "instrument_openai": instrument_openai,
     }
-    crew_obj = {k: v for k, v in crew_obj.items() if v is not None}
-    updated_map = dict(crews_map)
-    updated_map[crew_name] = crew_obj
-    out_payload = {"crews": updated_map}
+    if (otlp_endpoint or "").strip():
+        obs_spec["otlp_endpoint"] = (otlp_endpoint or "").strip()
+    if provider == "phoenix" and launch_ui:
+        obs_spec["launch_ui"] = True
 
-    st.markdown("### Preview")
+    # Update crews map
+    new_crews = dict(crews_map)
+    new_crew_obj = dict(current_crew)
+    new_crew_obj["observability"] = obs_spec
+    new_crews[crew_name] = new_crew_obj
+
+    # Preview full crews.yaml
+    out_payload = dict(existing_all)
+    out_payload["crews"] = new_crews
+
+    st.markdown("### Preview (crews.yaml)")
     preview = yaml.safe_dump(out_payload, sort_keys=False, allow_unicode=True)
     st.code(preview, language="yaml")
 
-    if st.button("Save crews.yaml (with backup)", type="primary", key="builder_save_crews"):
-        ok, info = safe_write_text(selected_path, preview)
+    # Save button
+    if st.button("Save crews.yaml (with backup)", type="primary", key="obs_save"):
+        ok, info = safe_write_text(crews_path, preview)
         (st.success if ok else st.error)(info)
+
+    st.markdown("---")
+    with st.expander("Quick start: write OpenTelemetry/Phoenix env vars to .env", expanded=False):
+        st.caption(str(ENV_FILE))
+        # Defaults based on current settings
+        default_endpoint = (otlp_endpoint or "http://127.0.0.1:4318").strip()
+        service_name = st.text_input("OTEL service.name", value="crew-composer", key="obs_qs_service")
+        endpoint_in = st.text_input("OTEL_EXPORTER_OTLP_ENDPOINT", value=default_endpoint, key="obs_qs_endpoint")
+        protocol = st.selectbox("OTEL_EXPORTER_OTLP_PROTOCOL", ["http/protobuf", "grpc"], index=0, key="obs_qs_protocol")
+        export_traces = st.checkbox("Enable traces export", value=True, key="obs_qs_traces")
+        export_metrics = st.checkbox("Enable metrics export", value=False, key="obs_qs_metrics")
+        export_logs = st.checkbox("Enable logs export", value=False, key="obs_qs_logs")
+
+        st.markdown("#### Phoenix-specific (optional)")
+        phoenix_collector = st.text_input(
+            "PHOENIX_COLLECTOR_ENDPOINT",
+            value=default_endpoint,
+            key="obs_qs_phx_collector",
+            help="OTLP collector endpoint Phoenix should use (often same as OTEL endpoint)",
+        )
+        phoenix_headers_yaml = st.text_area(
+            "PHOENIX_CLIENT_HEADERS (YAML or JSON mapping)",
+            value="",
+            key="obs_qs_phx_headers",
+            height=120,
+            help="Optional headers to send from client to Phoenix collector (e.g., authorization). Provide as YAML or JSON object.",
+        )
+        phoenix_headers_valid = True
+        phoenix_headers_rendered = ""
+        if (phoenix_headers_yaml or "").strip():
+            try:
+                parsed_hdrs = yaml.safe_load(phoenix_headers_yaml) or {}
+                if not isinstance(parsed_hdrs, dict):
+                    raise ValueError("Headers must be a mapping/dict")
+                # Compact JSON string for .env
+                phoenix_headers_rendered = json.dumps(parsed_hdrs, separators=(",", ":"))
+            except Exception as e:  # noqa: BLE001
+                phoenix_headers_valid = False
+                st.error(f"Invalid PHOENIX_CLIENT_HEADERS: {e}")
+
+        # Build env updates
+        env_updates: Dict[str, str] = {
+            "OTEL_EXPORTER_OTLP_ENDPOINT": endpoint_in.strip(),
+            "OTEL_EXPORTER_OTLP_PROTOCOL": protocol,
+            "OTEL_RESOURCE_ATTRIBUTES": f"service.name={service_name.strip() or 'crew-composer'}",
+        }
+        env_updates["OTEL_TRACES_EXPORTER"] = "otlp" if export_traces else "none"
+        env_updates["OTEL_METRICS_EXPORTER"] = "otlp" if export_metrics else "none"
+        env_updates["OTEL_LOGS_EXPORTER"] = "otlp" if export_logs else "none"
+
+        # Phoenix convenience variables
+        env_updates["PHOENIX_OTLP_ENDPOINT"] = endpoint_in.strip()
+        if (phoenix_collector or "").strip():
+            env_updates["PHOENIX_COLLECTOR_ENDPOINT"] = phoenix_collector.strip()
+        if phoenix_headers_rendered:
+            env_updates["PHOENIX_CLIENT_HEADERS"] = phoenix_headers_rendered
+
+        st.markdown("#### Preview .env additions")
+        preview_lines = [f"{k}={v}" for k, v in env_updates.items()]
+        st.code("\n".join(preview_lines) + "\n", language="dotenv")
+
+        if st.button("Write to .env (with backup)", type="primary", key="obs_qs_write_env", disabled=not phoenix_headers_valid):
+            try:
+                # Merge with existing .env
+                existing_pairs = dotenv_values(str(ENV_FILE)) if ENV_FILE.exists() else {}
+                merged: Dict[str, str] = {}
+                # Preserve existing keys first
+                for k, v in (existing_pairs or {}).items():
+                    if v is not None:
+                        merged[k] = str(v)
+                # Apply updates
+                for k, v in env_updates.items():
+                    merged[k] = v
+
+                # Re-render .env content
+                lines = [f"{k}={v}" for k, v in merged.items() if (k or "").strip()]
+                content_new = "\n".join(lines) + ("\n" if lines else "")
+                ok2, info2 = safe_write_text(ENV_FILE, content_new)
+                (st.success if ok2 else st.error)(info2)
+            except Exception as e:  # noqa: BLE001
+                st.error(f"Failed to write .env: {e}")
 
 
 def mcp_tools_yaml_builder_ui(selected_path: Path) -> None:

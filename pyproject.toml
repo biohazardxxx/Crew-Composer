@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "crew-composer"
-version = "0.2.0"
+version = "0.3.0"
 description = "Config-driven CrewAI composer with CLI, tool registry, and MCP integration"
 authors = [{ name = "CrewAI Template" }]
 readme = "README.md"
@@ -19,6 +19,8 @@ dependencies = [
   "python-dotenv>=1.0.1",
   "firecrawl>=1.0.0",
   "streamlit>=1.35.0",
+  "APScheduler>=3.10.4",
+  "filelock>=3.13.4",
 ]
 
 [project.scripts]

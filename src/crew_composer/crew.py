@@ -11,6 +11,7 @@ from rich.console import Console
 from .config_loader import get_project_root, load_agents_config, load_tasks_config, load_crew_config
 from .tool_registry import registry
 from .knowledge_loader import load_knowledge_config
+from .observability import init_observability
 
 console = Console()
 
@@ -35,6 +36,12 @@ class ConfigDrivenCrew:
         self._agents = load_agents_config(self.root)
         self._tasks = load_tasks_config(self.root)
         self._crew_cfg = load_crew_config(self.root, crew_name)
+        # Initialize observability (best-effort) as early as possible so instrumentation wraps CrewAI
+        try:
+            init_observability(getattr(self._crew_cfg, "observability", {}))
+        except Exception:
+            # Observability is optional; proceed silently if setup fails
+            pass
         # Build registry with the tools for the selected crew
         self._tool_registry = registry(self.root, self._crew_cfg.tools_files)
         # Ensure dynamic @task methods exist for YAML-defined tasks (for context resolution)

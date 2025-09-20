@@ -21,7 +21,15 @@ from .config_loader import (
     validate_all,
 )
 from .tool_registry import registry
+from .observability import init_observability
 from .crew import ConfigDrivenCrew
+from .scheduler import (
+    SchedulerService,
+    ScheduleEntry,
+    list_schedules as _list_schedules,
+    upsert_schedule as _upsert_schedule,
+    delete_schedule as _delete_schedule,
+)
 
 app = typer.Typer(add_completion=False, no_args_is_help=True)
 console = Console()
@@ -140,6 +148,11 @@ def run(
     root = get_project_root()
     _ensure_mcp_if_needed(root, crew)
     crew_cfg = load_crew_config(root, crew)
+    # Initialize observability before any heavy lifting
+    try:
+        init_observability(getattr(crew_cfg, "observability", {}))
+    except Exception as e:  # noqa: BLE001
+        console.print(f"[yellow]Observability init warning: {e}[/yellow]")
     _ = registry(root, crew_cfg.tools_files)  # ensure tools are instantiated early for clearer errors
 
     data: Dict[str, Any] = {}
@@ -206,6 +219,93 @@ def ui(
         subprocess.check_call(cmd, cwd=str(root))
     except subprocess.CalledProcessError as e:
         console.print(f"[red]Failed to start Streamlit UI: {e}[/red]")
+
+
+# -------------------- Scheduler Commands --------------------
+
+
+@app.command(name="schedule-service")
+def schedule_service(
+    poll: int = typer.Option(5, help="Seconds between checks for schedule file changes."),
+):
+    """Run the background scheduler service that executes scheduled crews.
+
+    This process monitors db/schedules.json and runs jobs accordingly.
+    """
+    load_dotenv(override=False)
+    root = get_project_root()
+    service = SchedulerService(root=root, poll_seconds=poll)
+    service.run_forever()
+
+
+@app.command(name="schedule-list")
+def schedule_list():
+    """List all schedules from the store (db/schedules.json)."""
+    load_dotenv(override=False)
+    entries = _list_schedules()
+    console.print(json.dumps([e.model_dump() for e in entries], indent=2))
+
+
+@app.command(name="schedule-upsert")
+def schedule_upsert(
+    id: Optional[str] = typer.Option(None, help="Existing ID to update; omit to create a new one."),
+    name: Optional[str] = typer.Option(None, help="Human-friendly schedule name."),
+    crew: Optional[str] = typer.Option(None, help="Crew name (from config/crews.yaml); defaults to first when omitted."),
+    trigger: str = typer.Option("date", help="Trigger type: date | interval | cron"),
+    run_at: Optional[str] = typer.Option(None, help="ISO datetime for date trigger, e.g., 2025-09-19T10:00:00"),
+    interval_seconds: Optional[int] = typer.Option(None, help="Interval in seconds for interval trigger."),
+    cron_json: Optional[str] = typer.Option(None, help='Cron mapping as JSON, e.g., "{\"minute\": \"0\", \"hour\": \"*\"}"'),
+    timezone: Optional[str] = typer.Option(None, help="Timezone identifier (optional)."),
+    enabled: bool = typer.Option(True, help="Whether the schedule is enabled."),
+    inputs_json: Optional[str] = typer.Option(None, help="JSON string with kickoff inputs."),
+    inputs: Optional[list[str]] = typer.Option(None, help="key=value pairs for inputs."),
+):
+    """Create or update a schedule entry."""
+    load_dotenv(override=False)
+    cron_map: Optional[Dict[str, str]] = None
+    if cron_json:
+        try:
+            cron_map = json.loads(cron_json)
+            if not isinstance(cron_map, dict):
+                raise ValueError("cron_json must decode to an object")
+        except Exception as e:  # noqa: BLE001
+            raise typer.BadParameter(f"Invalid cron_json: {e}")
+    data: Dict[str, Any] = {}
+    if inputs_json:
+        try:
+            data.update(json.loads(inputs_json))
+        except json.JSONDecodeError as e:
+            raise typer.BadParameter(f"Invalid JSON for --inputs-json: {e}")
+    data.update(_kv_to_dict(inputs))
+
+    entry = ScheduleEntry(
+        id=id or "",  # will be set by store if empty via tool; here we keep explicit
+        name=name or (id or ""),
+        crew=crew or None,
+        trigger=trigger,  # type: ignore[arg-type]
+        run_at=run_at,
+        interval_seconds=interval_seconds,
+        cron=cron_map,
+        timezone=timezone or None,
+        enabled=enabled,
+        inputs=data,
+    )
+    # If id omitted, generate a UUID-like fallback using name and time
+    if not entry.id:
+        import uuid as _uuid
+        entry.id = str(_uuid.uuid4())
+        if not entry.name:
+            entry.name = entry.id
+    saved = _upsert_schedule(entry)
+    console.print(json.dumps(saved.model_dump(), indent=2))
+
+
+@app.command(name="schedule-delete")
+def schedule_delete(id: str = typer.Argument(..., help="Schedule ID to delete.")):
+    """Delete a schedule entry by ID."""
+    load_dotenv(override=False)
+    ok = _delete_schedule(id)
+    console.print(json.dumps({"deleted": ok, "id": id}, indent=2))
 
 
 if __name__ == "__main__":
