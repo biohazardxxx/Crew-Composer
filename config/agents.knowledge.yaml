@@ -105,3 +105,59 @@ knowledge_sources:
       - Key facts (bullets):
       - Source list:
       - Context/links:
+
+  # Crew Composer knowledge
+  crew_design_checklist:
+    type: string
+    content: |
+      Crew Design Checklist
+
+      1) Purpose & Scope: Define clear objectives and expected business outcomes.
+      2) Primary Tasks: Break down into small, single-responsibility tasks.
+      3) Agents: Roles, goals, backstories, tools, LLMs, iteration limits, delegation.
+      4) Process: sequential vs hierarchical; manager agent/LLM when hierarchical.
+      5) Context Graph: Task dependencies via `context` with minimal coupling.
+      6) Knowledge: Identify string, files, CSV/PDF/JSON, or web sources, and how each is used.
+      7) Tools: Prefer existing entries in `config/tools.yaml`; document any required API keys.
+      8) Outputs: Define `output_file` paths and formats; ensure directories exist.
+      9) Human-in-the-loop: Mark tasks that need `human_input: true`.
+      10) Observability: Enable provider and endpoints; instrument CrewAI/OpenAI as needed.
+      11) Scheduling: Specify triggers, inputs, and guardrails.
+      12) Validation: Pass schema checks; ensure names and references align.
+      13) Runbook: Provide merge steps, commands, and acceptance criteria.
+
+  yaml_style_guide:
+    type: string
+    content: |
+      YAML Style Guide for Crew Composer
+
+      - Names: use `snake_case` for agent and task keys; keep them valid Python identifiers.
+      - Clarity over brevity: prefer explicit fields and comments over cleverness.
+      - Consistency: align with repository patterns in `config/*.yaml`.
+      - Small tasks: keep tasks single-responsibility with clear `expected_output`.
+      - Comments: explain "why", not the obvious "what".
+      - Tooling: attach tools at the agent level; leverage wildcards (e.g., "brave.*") when appropriate.
+      - DRY: reuse tools and knowledge sources; avoid near-duplicate tasks.
+
+  observability_best_practices:
+    type: string
+    content: |
+      Observability Best Practices (Crew Composer Template)
+
+      - Provider: use `phoenix` for local dev or `otlp` for standard collectors.
+      - Endpoint: default `http://127.0.0.1:4318`; override via `.env`.
+      - Instrumentation: enable `instrument_crewai`; enable `instrument_openai` when needed.
+      - Launch UI: optional, Phoenix only; may be disabled in CI.
+      - Env vars: manage via the UI Observability tab or `.env` helper block.
+      - Privacy: redact sensitive inputs/outputs in spans when required.
+
+  crewai_reference_web:
+    type: web_content
+    urls:
+      - "https://docs.crewai.com/concepts/crew"
+      - "https://docs.crewai.com/concepts/agents"
+      - "https://docs.crewai.com/concepts/tasks"
+      - "https://docs.crewai.com/concepts/tools"
+      - "https://docs.crewai.com/concepts/knowledge"
+    selector: "main"
+    max_depth: 1

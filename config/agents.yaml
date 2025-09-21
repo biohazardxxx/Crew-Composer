@@ -54,3 +54,60 @@ summary_analyst:
   tool_names: ["file_read","file_write"]
   llm: gpt-4o-mini
   max_iter: 5
+
+requirements_interviewer:
+  role: "Requirements Interviewer"
+  goal: "Elicit precise, structured requirements for a new Crew from human stakeholders"
+  backstory: "Expert facilitator in scoping AI crews, focusing on clarity, constraints, and success criteria."
+  verbose: true
+  allow_delegation: false
+  enabled: true
+  tool_names: ["file_write"]
+  llm: gpt-4o-mini
+  llm_temperature: 0.3
+  max_iter: 10
+
+crew_architect:
+  role: "Crew Architect"
+  goal: "Propose the high-level crew architecture, process, knowledge sources, and orchestration."
+  backstory: "Seasoned multi-agent systems architect."
+  verbose: true
+  allow_delegation: true
+  enabled: true
+  tool_names: ["file_read","file_write","web_rag"]
+  llm: gpt-4o-mini
+  llm_temperature: 0
+  max_iter: 6
+
+agent_designer:
+  role: "Agent Designer"
+  goal: "Define agents (roles, goals, backstories, tools, LLMs) aligned with requirements."
+  backstory: "Specialist in role design, capabilities, and tool selection."
+  verbose: true
+  allow_delegation: true
+  enabled: true
+  tool_names: ["file_read","file_write"]
+  llm: gpt-4o-mini
+  max_iter: 6
+
+task_planner:
+  role: "Task Planner"
+  goal: "Design tasks, expected outputs, context dependencies, outputs, and human_input flags."
+  backstory: "Thinks in pipelines and dependency graphs."
+  verbose: true
+  allow_delegation: true
+  enabled: true
+  tool_names: ["file_read","file_write"]
+  llm: gpt-4o-mini
+  max_iter: 6
+
+config_validator:
+  role: "Config Validator"
+  goal: "Validate YAML pieces for correctness and consistency; propose fixes."
+  backstory: "QA mindset ensuring configs are executable and robust."
+  verbose: true
+  allow_delegation: false
+  enabled: true
+  tool_names: ["file_read","file_write"]
+  llm: gpt-4o-mini
+  max_iter: 5
