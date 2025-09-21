@@ -1,20 +1,31 @@
+# Tasks configuration (Hello World style)
+
+# Tasks configuration notes:
+# - Set 'human_input: true' on a task to require interactive human confirmation/inputs
+#   during execution (supported CrewAI versions only). If unsupported, the field
+#   will be ignored gracefully.
+# - You can continue to define tasks with 'description', 'expected_output', 'context',
+#   and optional 'output_file' as usual.
+
 web_content_research_task:
-  description: 'Conduct a thorough research about {topic}. Make sure you find any
-    interesting and relevant information and delegate to create the output file.
+  description: >
+    Conduct a thorough research about {topic}.
+    Make sure you find any interesting and relevant information and delegate to create the output file.
+  expected_output: >
+    A concise list of the 5 most relevant bullet points about {topic}.
 
-    '
-  expected_output: 'A concise list of the 5 most relevant bullet points about {topic}.
 
-    '
 reporting_task:
-  description: "Use ONLY the context from web_content_research_task and turn these\
-    \ into a brief, clear section as bullet points. Then save the final markdown report\
-    \ to output/report{topic}.md. Prefer using the file_write tool configured for\
-    \ the 'output' directory with:\n  - filename: \"report{topic}.md\"\n  - content:\
-    \ <your generated markdown>\n"
-  expected_output: "A markdown report (no code fences) with a short introduction and\
-    \ one section per bullet point.  \n"
-  enabled: true
-  output_file: output/report.md
+  description: >
+    Use ONLY the context from web_content_research_task and turn these into a brief, clear section as bullet points.
+    Then save the final markdown report to output/report_{topic}.md.
+    Prefer using the file_write tool configured for the 'output' directory with:
+      - filename: "report_{topic}.md"
+      - content: <your generated markdown>
+  expected_output: >
+    A markdown report (no code fences) with a short introduction and one section per bullet point.
   context:
-  - web_content_research_task
+    - web_content_research_task
+  output_file: output/report_{topic}.md
+  # Set to true to enable interactive confirmation/input during this task
+  human_input: false

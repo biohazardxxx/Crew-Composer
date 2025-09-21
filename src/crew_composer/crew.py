@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import inspect
+import copy
 from pathlib import Path
 from typing import List, Optional, Dict, Any
 
@@ -86,9 +87,11 @@ class ConfigDrivenCrew:
             sig = inspect.signature(Task.__init__)
             use_ctor_agent = (agent_obj is not None and ("agent" in sig.parameters))
             can_pass_context = ("context" in sig.parameters)
+            can_pass_human = ("human_input" in sig.parameters)
         except Exception:
             use_ctor_agent = False
             can_pass_context = False
+            can_pass_human = False
         if agent_obj is not None and not use_ctor_agent:
             # Compatibility: insert instance into config
             payload["agent"] = agent_obj  # type: ignore[assignment]
@@ -99,15 +102,25 @@ class ConfigDrivenCrew:
                 f"with 'description' and 'expected_output'. If you recently renamed it, update "
                 f"crews.yaml task_order for the selected crew and any 'context' references in other tasks."
             )
-        # Construct the Task with optional context objects
+        # Prepare optional kwargs supported by current CrewAI version
+        optional_kwargs: Dict[str, Any] = {}
+        if can_pass_human:
+            try:
+                human_val = payload.get("human_input", None)
+            except Exception:
+                human_val = None
+            if human_val is not None:
+                optional_kwargs["human_input"] = human_val
+
+        # Construct the Task with optional context objects and human_input when supported
         if use_ctor_agent and can_pass_context and context_objs:
-            return Task(config=payload, agent=agent_obj, context=context_objs)  # type: ignore[arg-type]
+            return Task(config=payload, agent=agent_obj, context=context_objs, **optional_kwargs)  # type: ignore[arg-type]
         if use_ctor_agent and agent_obj is not None:
-            t = Task(config=payload, agent=agent_obj)  # type: ignore[arg-type]
+            t = Task(config=payload, agent=agent_obj, **optional_kwargs)  # type: ignore[arg-type]
         elif can_pass_context and context_objs:
-            t = Task(config=payload, context=context_objs)
+            t = Task(config=payload, context=context_objs, **optional_kwargs)
         else:
-            t = Task(config=payload)
+            t = Task(config=payload, **optional_kwargs)
         # As a fallback, try to set context attribute post-construction if supported
         if context_objs:
             try:
@@ -132,8 +145,38 @@ class ConfigDrivenCrew:
         falls back to the CrewBase-populated `self.agents_config[name]`.
         """
         cfg = self._agents.get(name, {})
-        tool_names = cfg.get("tool_names", cfg.get("tools", []))
-        tools = self._tool_registry.resolve(tool_names) if tool_names else []
+        # Build tools with support for per-agent flags (e.g., result_as_answer)
+        tools: List[Any] = []
+        tools_cfg = cfg.get("tools", None)
+        tool_names_legacy = cfg.get("tool_names", None)
+        if isinstance(tools_cfg, list) and tools_cfg:
+            for item in tools_cfg:
+                if isinstance(item, str):
+                    # Support wildcard resolution; deep-copy to avoid shared state across agents
+                    resolved = self._tool_registry.resolve([item])
+                    tools.extend(copy.deepcopy(t) for t in resolved)
+                elif isinstance(item, dict) and "name" in item:
+                    resolved = self._tool_registry.resolve([str(item["name"])])
+                    for base_tool in resolved:
+                        inst = copy.deepcopy(base_tool)
+                        # Apply supported per-tool flags
+                        if "result_as_answer" in item:
+                            try:
+                                setattr(inst, "result_as_answer", bool(item["result_as_answer"]))
+                            except Exception:
+                                # Best-effort; ignore if tool doesn't support the attribute
+                                pass
+                        tools.append(inst)
+                else:
+                    # Unknown entry type; skip silently to be permissive
+                    continue
+        else:
+            # Legacy support: simple list of names in 'tool_names' or 'tools'
+            names = tool_names_legacy or cfg.get("tools", [])
+            if isinstance(names, list) and names:
+                resolved = self._tool_registry.resolve(names)
+                tools = [copy.deepcopy(t) for t in resolved]
+
         # Base agent configuration from CrewBase-loaded YAML if available
         try:
             base_src = dict(self.agents_config.get(name, {}))  # type: ignore[attr-defined]

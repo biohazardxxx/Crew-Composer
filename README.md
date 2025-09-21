@@ -1,6 +1,6 @@
 # Crew Composer
 
-A modular, configuration-driven composer for building CrewAI apps that are easy to update, extend, and integrate with tools and MCP. Ships with a Typer-based CLI and is compatible with the CrewAI CLI (`crewai run`).
+A modular, configuration-driven composer for building CrewAI apps that are easy to update, extend, and integrate with tools and MCP. Ships with a Typer-based CLI, streamlit UI and is compatible with the CrewAI CLI (`crewai run`).
 
 ## Table of Contents
 

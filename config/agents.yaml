@@ -1,5 +1,13 @@
 # Agents configuration (Hello World style)
 # You can add more agents by following this structure.
+#
+# Tools configuration notes:
+# - You can specify tools as a list of strings (existing behavior), including wildcards (e.g., "brave_search.*").
+# - You can also specify tools as objects to enable per-tool options, for example:
+#     tools:
+#       - { name: "web_rag", result_as_answer: true }  # Tool output becomes the agent's answer
+#       - "file_write"                                 # Strings still supported
+# - Legacy key 'tool_names' remains supported and behaves like a list of strings.
 
 researcher:
   role: "Researcher"
