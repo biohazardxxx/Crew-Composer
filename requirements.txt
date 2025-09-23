@@ -1,6 +1,6 @@
 # Runtime dependencies for CrewAI Modular Config Template
 # Mirrors pyproject.toml [project.dependencies]
-crewai>=0.159.0
+crewai>=0.165.1
 crewai-tools>=0.62.0
 typer[all]>=0.16.0
 pydantic>=2.11.0
@@ -8,6 +8,9 @@ PyYAML>=6.0.2
 rich>=13.7.1
 python-dotenv>=1.1.1
 firecrawl>=1.0.0
+
+# Document parsing for web/PDF/office knowledge sources
+docling>=2.54.0
 
 # UI
 streamlit>=1.35.0

@@ -145,6 +145,19 @@ class ConfigDrivenCrew:
         falls back to the CrewBase-populated `self.agents_config[name]`.
         """
         cfg = self._agents.get(name, {})
+
+        # --- Helper: clone tools safely (avoid deepcopy issues with locks/RLocks) ---
+        def _safe_clone_tool(obj: Any) -> Any:
+            try:
+                return copy.deepcopy(obj)
+            except Exception:
+                try:
+                    # Shallow copy preserves internal locks by reference and avoids pickling
+                    return copy.copy(obj)
+                except Exception:
+                    # As a last resort, reuse the same instance (most tools are stateless)
+                    return obj
+
         # Build tools with support for per-agent flags (e.g., result_as_answer)
         tools: List[Any] = []
         tools_cfg = cfg.get("tools", None)
@@ -154,11 +167,11 @@ class ConfigDrivenCrew:
                 if isinstance(item, str):
                     # Support wildcard resolution; deep-copy to avoid shared state across agents
                     resolved = self._tool_registry.resolve([item])
-                    tools.extend(copy.deepcopy(t) for t in resolved)
+                    tools.extend(_safe_clone_tool(t) for t in resolved)
                 elif isinstance(item, dict) and "name" in item:
                     resolved = self._tool_registry.resolve([str(item["name"])])
                     for base_tool in resolved:
-                        inst = copy.deepcopy(base_tool)
+                        inst = _safe_clone_tool(base_tool)
                         # Apply supported per-tool flags
                         if "result_as_answer" in item:
                             try:
@@ -175,7 +188,7 @@ class ConfigDrivenCrew:
             names = tool_names_legacy or cfg.get("tools", [])
             if isinstance(names, list) and names:
                 resolved = self._tool_registry.resolve(names)
-                tools = [copy.deepcopy(t) for t in resolved]
+                tools = [_safe_clone_tool(t) for t in resolved]
 
         # Base agent configuration from CrewBase-loaded YAML if available
         try:
@@ -427,18 +440,42 @@ class ConfigDrivenCrew:
         # Optional planning LLM support (alias string), compatible with different Crew versions
         if getattr(self._crew_cfg, "planning_llm", None):
             try:
-                sig = inspect.signature(Crew.__init__)
-                if "planning_llm" in sig.parameters:
-                    crew_kwargs["planning_llm"] = self._crew_cfg.planning_llm
-                elif "manager_llm" in sig.parameters:
-                    crew_kwargs["manager_llm"] = self._crew_cfg.planning_llm
+                # Prefer Pydantic model field introspection (Crew is a Pydantic model)
+                field_names: list[str] = []
+                try:
+                    mf = getattr(Crew, "model_fields", None)
+                    if isinstance(mf, dict):
+                        field_names = list(mf.keys())
+                    else:
+                        legacy = getattr(Crew, "__fields__", None)
+                        if isinstance(legacy, dict):
+                            field_names = list(legacy.keys())
+                except Exception:
+                    field_names = []
+
+                if field_names:
+                    if "planning_llm" in field_names:
+                        crew_kwargs["planning_llm"] = self._crew_cfg.planning_llm
+                    elif "manager_llm" in field_names:
+                        crew_kwargs["manager_llm"] = self._crew_cfg.planning_llm
+                    else:
+                        console.print(
+                            "[yellow]planning_llm set in config, but Crew() model has no planning_llm/manager_llm field; ignoring[/yellow]"
+                        )
                 else:
-                    console.print(
-                        "[yellow]planning_llm set in config, but Crew() does not accept planning_llm/manager_llm in this version; ignoring[/yellow]"
-                    )
+                    # Fallback: try signature-based detection for non-Pydantic implementations
+                    sig = inspect.signature(Crew.__init__)
+                    if "planning_llm" in sig.parameters:
+                        crew_kwargs["planning_llm"] = self._crew_cfg.planning_llm
+                    elif "manager_llm" in sig.parameters:
+                        crew_kwargs["manager_llm"] = self._crew_cfg.planning_llm
+                    else:
+                        console.print(
+                            "[yellow]planning_llm set in config, but Crew() does not accept planning_llm/manager_llm in this version; ignoring[/yellow]"
+                        )
             except Exception as e:  # noqa: BLE001
                 console.print(
-                    f"[yellow]Could not introspect Crew signature ({e}); defaulting to manager_llm[/yellow]"
+                    f"[yellow]Could not introspect Crew fields/signature ({e}); defaulting to manager_llm[/yellow]"
                 )
                 crew_kwargs["manager_llm"] = self._crew_cfg.planning_llm
 
