@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import subprocess
 from datetime import datetime
 import sys
@@ -1125,6 +1126,70 @@ def ui_configs_tab():
         elif inputs_mode == "key=value pairs":
             inputs_pairs_text = st.text_area("--inputs (one per line)", placeholder="topic=Hello World", height=100, key="inputs_pairs")
 
+    def _build_run_command() -> tuple[List[str], Optional[str]]:
+        cmd_seq: List[str] = [
+            sys.executable,
+            "-m",
+            "crew_composer.cli",
+            "run",
+        ]
+        err: Optional[str] = None
+        if run_selected_crew != "<auto>":
+            cmd_seq += ["--crew", run_selected_crew]
+
+        if inputs_mode == "JSON":
+            payload = (inputs_json or "").strip()
+            if payload:
+                try:
+                    json.loads(payload)
+                    cmd_seq += ["--inputs-json", payload]
+                except json.JSONDecodeError as ex:
+                    err = f"Invalid JSON: {ex}"
+        elif inputs_mode == "key=value pairs":
+            pairs = [line.strip() for line in (inputs_pairs_text or "").splitlines() if line.strip()]
+            for p in pairs:
+                if "=" not in p:
+                    err = f"Invalid pair '{p}'. Use key=value format."
+                    break
+            if err is None:
+                for p in pairs:
+                    cmd_seq += ["--inputs", p]
+        return cmd_seq, err
+
+    human_input_tasks: List[str] = []
+    try:
+        tasks_cfg = cfg.load_tasks_config(PROJECT_ROOT)
+        crew_name_for_warning = None if run_selected_crew == "<auto>" else run_selected_crew
+        crew_cfg_obj = cfg.load_crew_config(PROJECT_ROOT, crew_name_for_warning)
+        preferred_order = list(getattr(crew_cfg_obj, "task_order", []) or [])
+        if preferred_order:
+            task_candidates = preferred_order
+        else:
+            task_candidates = list(tasks_cfg.keys())
+        seen: set[str] = set()
+        for t_name in task_candidates:
+            if t_name in seen:
+                continue
+            seen.add(t_name)
+            t_cfg = tasks_cfg.get(t_name)
+            if isinstance(t_cfg, dict) and bool(t_cfg.get("human_input", False)):
+                human_input_tasks.append(t_name)
+    except Exception:
+        human_input_tasks = []
+
+    if human_input_tasks:
+        st.warning(
+            "Human interaction required: the following tasks set `human_input: true` — "
+            + ", ".join(human_input_tasks)
+            + ". Streamlit cannot collect responses for these prompts; run in a terminal or disable human_input before launching."
+        )
+
+    run_cmd_preview, preview_error = _build_run_command()
+    st.markdown("**Command preview**")
+    st.code(" ".join(shlex.quote(part) for part in run_cmd_preview), language="bash")
+    if preview_error:
+        st.error(preview_error)
+
     warn = mcp_stdio_required_warning(PROJECT_ROOT)
     need_mcp = bool(warn)
     mcp_available = False
@@ -1140,34 +1205,11 @@ def ui_configs_tab():
 
     validate_before_run = st.checkbox("Validate before run", value=True)
 
-    run_clicked = st.button("Run crew now", type="primary", disabled=(need_mcp and not mcp_available))
+    run_clicked = st.button("Run crew now", type="primary", disabled=((need_mcp and not mcp_available) or bool(preview_error)))
     log_area = st.empty()
 
     if run_clicked:
-        cmd = [
-            sys.executable,
-            "-m",
-            "crew_composer.cli",
-            "run",
-        ]
-        if run_selected_crew != "<auto>":
-            cmd += ["--crew", run_selected_crew]
-        inputs_json = (inputs_json or "").strip()
-        if inputs_mode == "JSON" and inputs_json:
-            try:
-                json.loads(inputs_json)
-                cmd += ["--inputs-json", inputs_json]
-            except json.JSONDecodeError as e:  # noqa: BLE001
-                st.error(f"Invalid JSON: {e}")
-                return
-        elif inputs_mode == "key=value pairs" and inputs_pairs_text.strip():
-            pairs = [line.strip() for line in inputs_pairs_text.splitlines() if line.strip()]
-            for p in pairs:
-                if "=" not in p:
-                    st.error(f"Invalid pair '{p}'. Use key=value format.")
-                    return
-            for p in pairs:
-                cmd += ["--inputs", p]
+        cmd = list(run_cmd_preview)
 
         if validate_before_run:
             try:
