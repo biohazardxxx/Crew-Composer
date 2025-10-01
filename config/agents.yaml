@@ -18,7 +18,7 @@ researcher:
   enabled: true
   tool_names: ["web_rag","file_write"]
   # LLM alias recognized by CrewAI/llms(), API key via OPENAI_API_KEY
-  llm: gpt-4o-mini
+  llm: gpt-5-mini
   # Optional: LLM temperature (0-2), defaults to CrewAI default
   llm_temperature: 0
   # Optional: enable built-in caching for this agent (supported CrewAI versions only)
@@ -41,7 +41,7 @@ report_writer:
   allow_delegation: false
   enabled: true
   tool_names: ["file_read","file_write"]
-  llm: gpt-4o-mini
+  llm: gpt-5-mini
   max_iter: 5
 
 summary_analyst:
@@ -52,5 +52,5 @@ summary_analyst:
   allow_delegation: false
   enabled: false
   tool_names: ["file_read","file_write"]
-  llm: gpt-4o-mini
+  llm: gpt-5-mini
   max_iter: 5

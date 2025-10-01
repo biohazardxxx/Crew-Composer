@@ -6,13 +6,13 @@ crews:
     verbose: false
     planning: false
     memory: false
-    planning_llm: gpt-4o-mini
+    planning_llm: gpt-5-mini
 
     # Optional: specify a manager agent by name (must match an agent key in agents.yaml)
     # Manager LLM used to manage the crew (applies when hierarchical or when used explicitly)
     # manager_agent: summary_analyst
     # IMPORTANT: Either manager_agent or manager_llm must be set when using the hierarchical process.
-    manager_llm: gpt-4o-mini
+    manager_llm: gpt-5-mini
 
     # Knowledge sources configuration
     # List of knowledge sources to use from agents.knowledge.yaml
