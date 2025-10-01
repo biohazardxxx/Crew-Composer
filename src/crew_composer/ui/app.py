@@ -11,6 +11,7 @@ try:
     from .tabs import (
         ui_about_tab,
         ui_configs_tab,
+        ui_run_tab,
         ui_docs_tab,
         ui_env_tab,
         ui_knowledge_tab,
@@ -28,6 +29,7 @@ except Exception:  # noqa: BLE001
     from crew_composer.ui.tabs import (  # type: ignore
         ui_about_tab,
         ui_configs_tab,
+        ui_run_tab,
         ui_docs_tab,
         ui_env_tab,
         ui_knowledge_tab,
@@ -42,22 +44,24 @@ def main() -> None:
     st.title("Crew Composer Manager")
     st.caption(str(PROJECT_ROOT))
 
-    tabs = st.tabs(["Configs", "Knowledge", "Outputs", ".env", "Schedules", "Observability", "Docs", "About"])
+    tabs = st.tabs(["Configs", "Run", "Knowledge", "Outputs", ".env", "Schedules", "Observability", "Docs", "About"])
     with tabs[0]:
         ui_configs_tab()
     with tabs[1]:
-        ui_knowledge_tab()
+        ui_run_tab()
     with tabs[2]:
-        ui_outputs_tab()
+        ui_knowledge_tab()
     with tabs[3]:
-        ui_env_tab()
+        ui_outputs_tab()
     with tabs[4]:
-        ui_schedules_tab()
+        ui_env_tab()
     with tabs[5]:
-        ui_observability_tab()
+        ui_schedules_tab()
     with tabs[6]:
-        ui_docs_tab()
+        ui_observability_tab()
     with tabs[7]:
+        ui_docs_tab()
+    with tabs[8]:
         ui_about_tab()
 
 

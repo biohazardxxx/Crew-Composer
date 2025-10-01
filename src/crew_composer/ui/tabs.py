@@ -7,7 +7,7 @@ import subprocess
 from datetime import datetime
 import sys
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List, Optional
 
 import streamlit as st
 import yaml
@@ -1102,8 +1102,10 @@ def ui_configs_tab():
             except Exception as e:  # noqa: BLE001
                 st.exception(e)
 
-    st.markdown("---")
-    st.markdown("## Run crew")
+
+
+def ui_run_tab():
+    st.subheader("Run crew")
     if cfg is None:
         st.info("Running crews requires the local package import to succeed. Please fix imports first.")
         return
@@ -1154,6 +1156,7 @@ def ui_configs_tab():
             if err is None:
                 for p in pairs:
                     cmd_seq += ["--inputs", p]
+
         return cmd_seq, err
 
     human_input_tasks: List[str] = []
